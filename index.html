@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pulsecrow – Trustless Two-Party Escrow on PulseChain</title>
 
-  <!-- ✅ Load ethers.js UMD build BEFORE your script -->
+  <!-- ✅ Load ethers.js UMD build -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.1/dist/ethers.umd.min.js"></script>
 
   <style>
@@ -33,6 +33,7 @@
     }
     .small{font-size:0.9em;color:#555;}
     .section{margin-top:30px;}
+    label{font-size:0.9em;margin-left:4px;}
   </style>
 </head>
 
@@ -51,13 +52,22 @@
   <div class="section">
     <h2>Create New Escrow</h2>
     <input id="partyB" placeholder="Counterparty address (Party B)" />
-    <input id="tokenA" placeholder="Your token (Token A) address" />
-    <input id="tokenB" placeholder="Their token (Token B) address" />
+
+    <div>
+      <input id="tokenA" placeholder="Your token (Token A) address" />
+      <label><input type="checkbox" id="useEsteemA"> Use Esteem</label>
+    </div>
     <input id="amountA" placeholder="Your amount (e.g. 1.5)" />
     <input id="decA" placeholder="Token A decimals (e.g. 18)" />
+
+    <div>
+      <input id="tokenB" placeholder="Their token (Token B) address" />
+      <label><input type="checkbox" id="useEsteemB"> Use Esteem</label>
+    </div>
     <input id="amountB" placeholder="Their amount (e.g. 100)" />
     <input id="decB" placeholder="Token B decimals (e.g. 18)" />
-    <input id="deadline" placeholder="Deadline (Unix timestamp)" />
+
+    <input id="deadline" placeholder="Deadline (minutes from now)" />
     <button id="createBtn" disabled>Create Escrow</button>
     <div id="newEscrow" class="small"></div>
   </div>
@@ -75,182 +85,141 @@
 
   <div id="log" class="small"></div>
 
-  <!-- ✅ Pulsecrow logic -->
-<script>
-  // --- CONFIG ---
-  const factoryAddress = "0x1ea0a16CF8677013a61612127B3d387FE4622497";
-  const feeWallet = "0xF84b1110F14Bd7D5fEEEe033AbF4bC24e829A06c";
-  const feeBps = 50; // 0.5 %
+  <!-- ✅ Logic -->
+  <script>
+    const factoryAddress = "0x1ea0a16CF8677013a61612127B3d387FE4622497";
+    const feeWallet = "0xF84b1110F14Bd7D5fEEEe033AbF4bC24e829A06c";
+    const feeBps = 50;
+    const ESTEEM_TOKEN = "0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5";
+    const ESTEEM_DECIMALS = 18;
 
-  // --- ABIs ---
-  const factoryABI = [
-    "function createEscrow(address,address,address,address,uint256,uint256,uint256) external returns (address)",
-    "event EscrowCreated(address indexed creator,address escrowAddress)"
-  ];
-  const escrowABI = [
-    "function depositA() external",
-    "function depositB() external",
-    "function settle() external",
-    "function refundA() external",
-    "function refundB() external",
-    "function partyA() view returns (address)",
-    "function partyB() view returns (address)",
-    "function tokenA() view returns (address)",
-    "function tokenB() view returns (address)",
-    "function amountA() view returns (uint256)",
-    "function amountB() view returns (uint256)",
-    "function depositedA() view returns (bool)",
-    "function depositedB() view returns (bool)",
-    "function decimalsA() view returns (uint8)",
-    "function decimalsB() view returns (uint8)"
-  ];
+    const factoryABI = [
+      "function createEscrow(address,address,address,address,uint256,uint256,uint256) external returns (address)",
+      "event EscrowCreated(address indexed creator,address escrowAddress)"
+    ];
+    const escrowABI = [
+      "function depositA() external","function depositB() external","function settle() external",
+      "function refundA() external","function refundB() external",
+      "function partyA() view returns (address)","function partyB() view returns (address)",
+      "function tokenA() view returns (address)","function tokenB() view returns (address)",
+      "function amountA() view returns (uint256)","function amountB() view returns (uint256)",
+      "function depositedA() view returns (bool)","function depositedB() view returns (bool)"
+    ];
 
-  let provider, signer, userAddr;
+    let provider, signer, userAddr;
+    function log(msg){ document.getElementById("log").innerText=msg; console.log(msg); }
+    function toWei(amount,dec){ return BigInt(Math.round(parseFloat(amount)*10**dec)); }
 
-  function log(msg){ document.getElementById("log").innerText = msg; console.log(msg); }
-  function toWei(amount, dec){ return BigInt(Math.round(parseFloat(amount) * 10 ** dec)); }
-
-  // --- Connect wallet ---
-  async function connect(){
-    try{
-      if(!window.ethereum) return alert("Please install MetaMask or OKX Wallet.");
-      provider = new ethers.BrowserProvider(window.ethereum);
-      await provider.send("eth_requestAccounts", []);
-      signer = await provider.getSigner();
-      userAddr = await signer.getAddress();
-      document.getElementById("walletInfo").innerText = `Connected: ${userAddr}`;
-      ["createBtn","approveBtn","depositBtn","settleBtn","refundBtn"]
-        .forEach(id=>document.getElementById(id).disabled=false);
-      document.getElementById("statusBox").innerText="Wallet connected.";
-      log("Wallet connected: "+userAddr);
-    }catch(err){ console.error(err); alert("Connection failed: "+err.message); }
-  }
-
-  // --- Create Escrow ---
-  async function createEscrow(){
-    try{
-      const f = new ethers.Contract(factoryAddress, factoryABI, signer);
-      const amtA = toWei(document.getElementById("amountA").value, parseInt(document.getElementById("decA").value));
-      const amtB = toWei(document.getElementById("amountB").value, parseInt(document.getElementById("decB").value));
-
-      // convert minutes → unix timestamp
-      const minutes = parseInt(document.getElementById("deadline").value);
-      const deadlineUnix = Math.floor(Date.now()/1000) + (minutes * 60);
-
-      const tx = await f.createEscrow(
-        userAddr,
-        document.getElementById("partyB").value,
-        document.getElementById("tokenA").value,
-        document.getElementById("tokenB").value,
-        amtA, amtB,
-        deadlineUnix
-      );
-      log("Creating escrow…");
-      const rcpt = await tx.wait();
-      const evt = rcpt.logs?.find(l=>l.fragment?.name==="EscrowCreated");
-      const addr = evt ? evt.args.escrowAddress : "(unknown)";
-      document.getElementById("newEscrow").innerText = `✅ Escrow created at: ${addr}`;
-      document.getElementById("escrowAddr").value = addr;
-    }catch(err){ log("Error: "+err.message); }
-  }
-
-  function getEscrow(){
-    const addr = document.getElementById("escrowAddr").value.trim();
-    if(!ethers.isAddress(addr)) throw new Error("Invalid escrow address");
-    return new ethers.Contract(addr, escrowABI, signer);
-  }
-
-  async function approve(){
-    try{
-      const e=getEscrow();
-      const a=await e.partyA(), b=await e.partyB();
-      const isA=userAddr.toLowerCase()===a.toLowerCase();
-      const tokenAddr=isA?await e.tokenA():await e.tokenB();
-      const amt=isA?await e.amountA():await e.amountB();
-      const token=new ethers.Contract(tokenAddr,["function approve(address,uint256) public returns(bool)"],signer);
-      const tx=await token.approve(document.getElementById("escrowAddr").value,amt);
-      log("Approving…");
-      await tx.wait();
-      log("✅ Approved");
-    }catch(err){ log("Approval error: "+err.message); }
-  }
-
-  async function deposit(){
-    try{
-      const e=getEscrow();
-      const a=await e.partyA(), b=await e.partyB();
-      const isA=userAddr.toLowerCase()===a.toLowerCase();
-      const tx=await (isA?e.depositA():e.depositB());
-      log("Depositing…");
-      await tx.wait();
-      log("✅ Deposit complete.");
-      readStatus();
-    }catch(err){ log("Deposit error: "+err.message); }
-  }
-
-  async function settle(){
-    try{ const tx=await getEscrow().settle(); await tx.wait(); log("✅ Settled."); }
-    catch(err){ log("Settle error: "+err.message); }
-  }
-
-  async function refund(){
-    try{
-      const e=getEscrow();
-      const a=await e.partyA(), b=await e.partyB();
-      const isA=userAddr.toLowerCase()===a.toLowerCase();
-      const tx=await (isA?e.refundA():e.refundB());
-      await tx.wait();
-      log("✅ Refunded.");
-    }catch(err){ log("Refund error: "+err.message); }
-  }
-
-  async function readStatus(){
-    try{
-      const e=getEscrow();
-      const [a,b,da,db,ta,tb,aa,ab] = await Promise.all([
-        e.partyA(), e.partyB(), e.depositedA(), e.depositedB(),
-        e.tokenA(), e.tokenB(), e.amountA(), e.amountB()
-      ]);
-
-      // Try to fetch token symbols
-      const symbolA = await trySymbol(ta);
-      const symbolB = await trySymbol(tb);
-
-      // Format amounts with decimals (default 18)
-      const decA = await tryDecimals(ta);
-      const decB = await tryDecimals(tb);
-      const amtA = parseFloat(ethers.formatUnits(aa, decA)).toFixed(2);
-      const amtB = parseFloat(ethers.formatUnits(ab, decB)).toFixed(2);
-
-      document.getElementById("statusBox").innerText =
-        `Escrow\nA: ${a}\nB: ${b}\nDeposited A (${amtA} ${symbolA}): ${da}\nDeposited B (${amtB} ${symbolB}): ${db}`;
-    }catch(err){
-      document.getElementById("statusBox").innerText = "Status error: " + err.message;
+    async function connect(){
+      try{
+        if(!window.ethereum) return alert("Please install MetaMask or OKX Wallet.");
+        provider=new ethers.BrowserProvider(window.ethereum);
+        await provider.send("eth_requestAccounts",[]);
+        signer=await provider.getSigner();
+        userAddr=await signer.getAddress();
+        document.getElementById("walletInfo").innerText=`Connected: ${userAddr}`;
+        ["createBtn","approveBtn","depositBtn","settleBtn","refundBtn"].forEach(id=>document.getElementById(id).disabled=false);
+        document.getElementById("statusBox").innerText="Wallet connected.";
+      }catch(e){alert("Connection failed: "+e.message);}
     }
-  }
 
-  async function trySymbol(addr){
-    try{
-      const t = new ethers.Contract(addr, ["function symbol() view returns (string)"], provider);
-      return await t.symbol();
-    }catch{return "TOKEN";}
-  }
-  async function tryDecimals(addr){
-    try{
-      const t = new ethers.Contract(addr, ["function decimals() view returns (uint8)"], provider);
-      return await t.decimals();
-    }catch{return 18;}
-  }
+    async function createEscrow(){
+      try{
+        const f=new ethers.Contract(factoryAddress,factoryABI,signer);
+        const amtA=toWei(document.getElementById("amountA").value,parseInt(document.getElementById("decA").value));
+        const amtB=toWei(document.getElementById("amountB").value,parseInt(document.getElementById("decB").value));
+        const minutes=parseInt(document.getElementById("deadline").value);
+        const deadlineUnix=Math.floor(Date.now()/1000)+(minutes*60);
+        const tx=await f.createEscrow(
+          userAddr,
+          document.getElementById("partyB").value,
+          document.getElementById("tokenA").value,
+          document.getElementById("tokenB").value,
+          amtA,amtB,deadlineUnix
+        );
+        const rcpt=await tx.wait();
+        const evt=rcpt.logs?.find(l=>l.fragment?.name==="EscrowCreated");
+        const addr=evt?evt.args.escrowAddress:"(unknown)";
+        document.getElementById("newEscrow").innerText=`✅ Escrow created at: ${addr}`;
+        document.getElementById("escrowAddr").value=addr;
+      }catch(e){log("Error: "+e.message);}
+    }
 
-  // --- Event bindings ---
-  document.getElementById("connectBtn").onclick=connect;
-  document.getElementById("createBtn").onclick=createEscrow;
-  document.getElementById("approveBtn").onclick=approve;
-  document.getElementById("depositBtn").onclick=deposit;
-  document.getElementById("settleBtn").onclick=settle;
-  document.getElementById("refundBtn").onclick=refund;
-</script>
+    function getEscrow(){
+      const addr=document.getElementById("escrowAddr").value.trim();
+      if(!ethers.isAddress(addr)) throw new Error("Invalid escrow address");
+      return new ethers.Contract(addr,escrowABI,signer);
+    }
 
+    async function approve(){
+      try{
+        const e=getEscrow();
+        const a=await e.partyA(),b=await e.partyB();
+        const isA=userAddr.toLowerCase()===a.toLowerCase();
+        const tokenAddr=isA?await e.tokenA():await e.tokenB();
+        const amt=isA?await e.amountA():await e.amountB();
+        const token=new ethers.Contract(tokenAddr,["function approve(address,uint256) public returns(bool)"],signer);
+        const tx=await token.approve(document.getElementById("escrowAddr").value,amt);
+        await tx.wait(); log("✅ Approved");
+      }catch(e){log("Approval error: "+e.message);}
+    }
+
+    async function deposit(){
+      try{
+        const e=getEscrow();
+        const a=await e.partyA(),b=await e.partyB();
+        const isA=userAddr.toLowerCase()===a.toLowerCase();
+        const tx=await(isA?e.depositA():e.depositB());
+        await tx.wait(); log("✅ Deposit complete."); readStatus();
+      }catch(e){log("Deposit error: "+e.message);}
+    }
+
+    async function settle(){try{const tx=await getEscrow().settle();await tx.wait();log("✅ Settled.");}catch(e){log("Settle error: "+e.message);}}
+    async function refund(){
+      try{
+        const e=getEscrow();
+        const a=await e.partyA(),b=await e.partyB();
+        const isA=userAddr.toLowerCase()===a.toLowerCase();
+        const tx=await(isA?e.refundA():e.refundB());
+        await tx.wait(); log("✅ Refunded.");
+      }catch(e){log("Refund error: "+e.message);}
+    }
+
+    async function readStatus(){
+      try{
+        const e=getEscrow();
+        const [a,b,da,db,ta,tb,aa,ab]=await Promise.all([
+          e.partyA(),e.partyB(),e.depositedA(),e.depositedB(),e.tokenA(),e.tokenB(),e.amountA(),e.amountB()
+        ]);
+        const symbolA=await trySymbol(ta),symbolB=await trySymbol(tb);
+        const decA=await tryDecimals(ta),decB=await tryDecimals(tb);
+        const amtA=parseFloat(ethers.formatUnits(aa,decA)).toFixed(2);
+        const amtB=parseFloat(ethers.formatUnits(ab,decB)).toFixed(2);
+        document.getElementById("statusBox").innerText=
+          `Escrow\nA: ${a}\nB: ${b}\nDeposited A (${amtA} ${symbolA}): ${da}\nDeposited B (${amtB} ${symbolB}): ${db}`;
+      }catch(e){document.getElementById("statusBox").innerText="Status error: "+e.message;}
+    }
+
+    async function trySymbol(addr){try{const t=new ethers.Contract(addr,["function symbol() view returns (string)"],provider);return await t.symbol();}catch{return"TOKEN";}}
+    async function tryDecimals(addr){try{const t=new ethers.Contract(addr,["function decimals() view returns (uint8)"],provider);return await t.decimals();}catch{return18;}}
+
+    // --- Esteem autofill ---
+    function setupEsteemCheckboxes(){
+      const cbA=document.getElementById("useEsteemA"),cbB=document.getElementById("useEsteemB");
+      const tA=document.getElementById("tokenA"),tB=document.getElementById("tokenB");
+      const dA=document.getElementById("decA"),dB=document.getElementById("decB");
+      cbA.addEventListener("change",()=>{if(cbA.checked){tA.value=ESTEEM_TOKEN;dA.value=ESTEEM_DECIMALS;tA.disabled=dA.disabled=true;}else{tA.value=dA.value="";tA.disabled=dA.disabled=false;}});
+      cbB.addEventListener("change",()=>{if(cbB.checked){tB.value=ESTEEM_TOKEN;dB.value=ESTEEM_DECIMALS;tB.disabled=dB.disabled=true;}else{tB.value=dB.value="";tB.disabled=dB.disabled=false;}});
+    }
+
+    // --- Bind events ---
+    document.getElementById("connectBtn").onclick=connect;
+    document.getElementById("createBtn").onclick=createEscrow;
+    document.getElementById("approveBtn").onclick=approve;
+    document.getElementById("depositBtn").onclick=deposit;
+    document.getElementById("settleBtn").onclick=settle;
+    document.getElementById("refundBtn").onclick=refund;
+    setupEsteemCheckboxes();
+  </script>
 </body>
 </html>
-
