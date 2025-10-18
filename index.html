@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pulsecrow – Trustless Two-Party Escrow on PulseChain</title>
+  <title>Pulsecrow – Simple Two-Party Escrow on PulseChain</title>
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.1/dist/ethers.umd.min.js"></script>
 
   <style>
     :root { --primary:#0084ff; --bg:#f8fafc; --text:#222; }
+    html { scroll-behavior: smooth; }
     body {
       font-family:"Segoe UI",Roboto,sans-serif;
       background:var(--bg); color:var(--text);
@@ -70,6 +71,13 @@
       margin-bottom:12px;
     }
     @keyframes spin {100% {transform:rotate(360deg);}}
+
+    /* Instructions box */
+    #instructions {
+      background:#fff; border:1px solid #ddd; border-radius:10px;
+      padding:16px; margin-top:40px; font-size:14px; line-height:1.55;
+    }
+    #instructions b { color:#000; }
   </style>
 </head>
 
@@ -82,7 +90,10 @@
   </div>
   <h1 style="margin-top:0;">Pulsecrow</h1>
   <p style="text-align:center;">
-    Trustless two-deposit escrow on <b>PulseChain</b>
+    Simple two-deposit escrow on <b>PulseChain</b><br>
+    <a href="#instructions" style="font-size:14px; color:#0084ff; text-decoration:none;">
+      📘 View Instructions
+    </a>
   </p>
 
   <button id="connectBtn">🔗 Connect Wallet</button>
@@ -138,6 +149,36 @@
   <div id="loadingOverlay">
     <div class="spinner"></div>
     <div>⏳ Waiting for confirmation...</div>
+  </div>
+
+  <!-- INSTRUCTIONS -->
+  <div id="instructions">
+    <b>How to use Pulsecrow:</b><br><br>
+
+    <b>1.</b> Click <b>“Connect Wallet”</b> and select your PulseChain wallet (OKX or MetaMask).<br>
+    <b>2.</b> Decide if you want to <b>create</b> a new escrow or <b>join</b> an existing one.<br><br>
+
+    <u>To create a new escrow:</u><br>
+    • Choose <b>Fee</b> or <b>No Fee</b> mode.<br>
+    • Enter your counterparty’s wallet address (Party B).<br>
+    • Enter each token’s address, amount, and decimals.<br>
+    • Tick <b>“Use Esteem”</b> if you want to autofill the Esteem token.<br>
+    • Enter the <b>deadline</b> in minutes (e.g. 30 = 30 minutes).<br>
+    • Click <b>“Create Escrow”</b> and wait for confirmation.<br>
+    • Share the escrow address with your counterparty.<br><br>
+
+    <u>To join an existing escrow:</u><br>
+    • Paste the escrow address in the box.<br>
+    • Click <b>“Approve My Token”</b> (authorizes the contract to transfer your tokens).<br>
+    • Click <b>“Deposit My Token”</b> to lock your funds.<br>
+    • Once both sides <b>approve and deposit</b> their tokens, either party can click <b>“Settle”</b> to complete the swap.<br>
+    • If the deadline passes without both deposits, either side can click <b>“Refund”</b> to retrieve their funds.<br><br>
+
+    ⚠️ <b>Important:</b> Native PLS cannot be used directly as a token.<br>
+    To use PLS in Pulsecrow, first wrap it to <b>WPLS</b> on PulseX (1 PLS = 1 WPLS).<br>
+    Then use the <b>WPLS contract address (0xA10D38C309b7B86a0E0F34218c5a620b6245Ff96)</b> as your token address.<br><br>
+
+    <i>All actions happen fully on-chain. Pulsecrow never holds your funds — it simply coordinates two secure token deposits.</i>
   </div>
 
   <script>
