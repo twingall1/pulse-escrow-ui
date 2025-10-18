@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pulsecrow – Trustless Two-Party Escrow on PulseChain</title>
 
-  <!-- ✅ Load ethers.js UMD build -->
+  <!-- ✅ Load ethers.js -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.1/dist/ethers.umd.min.js"></script>
 
   <style>
@@ -33,25 +33,40 @@
     }
     .small{font-size:0.9em;color:#555;}
     .section{margin-top:30px;}
+
+    /* Checkbox row fix */
     .esteem-toggle {
-      display:flex; align-items:center; gap:6px; margin:4px 0 10px 0;
-      font-size:0.9em;
+      display:flex; align-items:center; gap:6px;
+      margin:4px 0 10px 0; font-size:0.9em; width:fit-content;
+    }
+    .esteem-toggle input[type="checkbox"] {
+      accent-color: var(--primary);
+      transform: scale(1.2);
+      cursor:pointer;
+    }
+    .esteem-toggle label { cursor:pointer; }
+
+    /* Centered logo row */
+    .logo-row {
+      display:flex; justify-content:center; align-items:center;
+      gap:16px; margin-bottom:10px;
+    }
+    .logo-row img {
+      width:96px; height:96px; object-fit:contain;
+      filter:drop-shadow(0 0 4px rgba(0,0,0,0.4));
     }
   </style>
 </head>
 
 <body>
-<div style="display:flex; justify-content:center; align-items:center; gap:16px; margin-bottom:10px;">
-  <span style="font-size:36px;">⚡</span>
-  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Crow_silhouette_black.svg/512px-Crow_silhouette_black.svg.png"
-       alt="Pulsecrow Logo"
-       style="width:96px; height:96px; object-fit:contain; filter:drop-shadow(0 0 4px rgba(0,0,0,0.4));">
-  <span style="font-size:36px;">⚡</span>
-</div>
-
-<h1 style="text-align:center; margin-top:0;">Pulsecrow</h1>
-
-
+  <!-- ⚡ Crow Header -->
+  <div class="logo-row">
+    <span style="font-size:36px;">⚡</span>
+    <img src="https://cdn-icons-png.flaticon.com/512/616/616408.png"
+         alt="Pulsecrow Logo">
+    <span style="font-size:36px;">⚡</span>
+  </div>
+  <h1 style="margin-top:0;">Pulsecrow</h1>
   <p style="text-align:center;">
     Trustless two-deposit escrow on <b>PulseChain</b><br>
     0.5 % fee → <code>0xF84b1110F14Bd7D5fEEEe033AbF4bC24e829A06c</code>
@@ -103,8 +118,6 @@
   <!-- ✅ Logic -->
   <script>
     const factoryAddress = "0x1ea0a16CF8677013a61612127B3d387FE4622497";
-    const feeWallet = "0xF84b1110F14Bd7D5fEEEe033AbF4bC24e829A06c";
-    const feeBps = 50;
     const ESTEEM_TOKEN = "0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5";
     const ESTEEM_DECIMALS = 18;
 
@@ -122,12 +135,12 @@
     ];
 
     let provider, signer, userAddr;
-    function log(msg){ document.getElementById("log").innerText=msg; console.log(msg); }
-    function toWei(amount,dec){ return BigInt(Math.round(parseFloat(amount)*10**dec)); }
+    function log(msg){document.getElementById("log").innerText=msg;console.log(msg);}
+    function toWei(amount,dec){return BigInt(Math.round(parseFloat(amount)*10**dec));}
 
     async function connect(){
       try{
-        if(!window.ethereum) return alert("Please install MetaMask or OKX Wallet.");
+        if(!window.ethereum)return alert("Please install MetaMask or OKX Wallet.");
         provider=new ethers.BrowserProvider(window.ethereum);
         await provider.send("eth_requestAccounts",[]);
         signer=await provider.getSigner();
@@ -162,7 +175,7 @@
 
     function getEscrow(){
       const addr=document.getElementById("escrowAddr").value.trim();
-      if(!ethers.isAddress(addr)) throw new Error("Invalid escrow address");
+      if(!ethers.isAddress(addr))throw new Error("Invalid escrow address");
       return new ethers.Contract(addr,escrowABI,signer);
     }
 
@@ -175,7 +188,7 @@
         const amt=isA?await e.amountA():await e.amountB();
         const token=new ethers.Contract(tokenAddr,["function approve(address,uint256) public returns(bool)"],signer);
         const tx=await token.approve(document.getElementById("escrowAddr").value,amt);
-        await tx.wait(); log("✅ Approved");
+        await tx.wait();log("✅ Approved");
       }catch(e){log("Approval error: "+e.message);}
     }
 
@@ -185,7 +198,7 @@
         const a=await e.partyA(),b=await e.partyB();
         const isA=userAddr.toLowerCase()===a.toLowerCase();
         const tx=await(isA?e.depositA():e.depositB());
-        await tx.wait(); log("✅ Deposit complete."); readStatus();
+        await tx.wait();log("✅ Deposit complete.");readStatus();
       }catch(e){log("Deposit error: "+e.message);}
     }
 
@@ -196,7 +209,7 @@
         const a=await e.partyA(),b=await e.partyB();
         const isA=userAddr.toLowerCase()===a.toLowerCase();
         const tx=await(isA?e.refundA():e.refundB());
-        await tx.wait(); log("✅ Refunded.");
+        await tx.wait();log("✅ Refunded.");
       }catch(e){log("Refund error: "+e.message);}
     }
 
@@ -218,7 +231,6 @@
     async function trySymbol(addr){try{const t=new ethers.Contract(addr,["function symbol() view returns (string)"],provider);return await t.symbol();}catch{return"TOKEN";}}
     async function tryDecimals(addr){try{const t=new ethers.Contract(addr,["function decimals() view returns (uint8)"],provider);return await t.decimals();}catch{return18;}}
 
-    // --- Esteem autofill ---
     function setupEsteemCheckboxes(){
       const cbA=document.getElementById("useEsteemA"),cbB=document.getElementById("useEsteemB");
       const tA=document.getElementById("tokenA"),tB=document.getElementById("tokenB");
@@ -227,7 +239,6 @@
       cbB.addEventListener("change",()=>{if(cbB.checked){tB.value=ESTEEM_TOKEN;dB.value=ESTEEM_DECIMALS;tB.disabled=dB.disabled=true;}else{tB.value=dB.value="";tB.disabled=dB.disabled=false;}});
     }
 
-    // --- Bind events ---
     document.getElementById("connectBtn").onclick=connect;
     document.getElementById("createBtn").onclick=createEscrow;
     document.getElementById("approveBtn").onclick=approve;
@@ -238,5 +249,3 @@
   </script>
 </body>
 </html>
-
-
