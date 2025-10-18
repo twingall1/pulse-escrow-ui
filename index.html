@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pulsecrow – Two-Deposit Escrow on PulseChain</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.1/dist/ethers.min.js"></script>
+  <style>
+    :root {
+      --primary: #0084ff;
+      --bg: #f7f9fc;
+      --text: #222;
+    }
+    body {
+      font-family: "Segoe UI", Roboto, sans-serif;
+      max-width: 650px;
+      margin: 40px auto;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 0 16px rgba(0,0,0,0.1);
+    }
+    h1,h2 { text-align:center; }
+    input,button {
+      width:100%;
+      padding:10px;
+      margin:6px 0;
+      border-radius:8px;
+      border:1px solid #ccc;
+      font-size:15px;
+    }
+    button {
+      background: var(--primary);
+      color:#fff;
+      font-weight:600;
+      cursor:pointer;
+      border:none;
+    }
+    button:hover { background:#006edc; }
+    hr { margin:24px 0; }
+    .small { font-size:0.9em; color:#555; }
+    #statusBox {
+      background:#fff;
+      border:1px solid #ddd;
+      border-radius:8px;
+      padding:10px;
+      margin-top:10px;
+      white-space:pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>⚡ Pulsecrow</h1>
+  <p style="text-align:center;">Trustless two-deposit escrow on <b>PulseChain</b><br>
+  0.5 % fee to <code>0xf84b1110f14Bd7D5fEEeE033ABf4Bc24e829A06c</code></p>
+
+  <button id="connectBtn">🔗 Connect Wallet</button>
+  <div id="walletInfo" class="small"></div>
+
+  <hr/>
+
+  <h2>Create Escrow</h2>
+  <input id="partyA" placeholder="Your address (Party A)" />
+  <input id="partyB" placeholder="Counterparty address (Party B)" />
+  <input id="tokenA" placeholder="Token A address" />
+  <input id="tokenB" placeholder="Token B address" />
+  <input id="amountA" placeholder="Amount A (wei)" />
+  <input id="amountB" placeholder="Amount B (wei)" />
+  <input id="deadline" placeholder="Deadline (Unix timestamp)" />
+  <button id="createEscrowBtn">Create Escrow</button>
+
+  <hr/>
+
+  <h2>Interact With Escrow</h2>
+  <input id="escrowAddress" placeholder="Existing Escrow Address" />
+  <button id="approveA">Approve Token A</button>
+  <button id="approveB">Approve Token B</button>
+  <button id="depositA">Deposit A</button>
+  <button id="depositB">Deposit B</button>
+  <button id="settle">Settle</button>
+  <button id="refundA">Refund A</button>
+  <button id="refundB">Refund B</button>
+
+  <div id="statusBox"></div>
+  <div id="log" class="small"></div>
+
+<script>
+const factoryAddress = "0xYOUR_FACTORY_CONTRACT_HERE"; // ← FILL THIS IN
+const feeWallet = "0xf84b1110f14Bd7D5fEEeE033ABf4Bc24e829A06c";
+const feeBps = 50; // 0.5 %
+
+const factoryABI = [
+  "function createEscrow(address,address,address,address,uint256,uint256,uint256) external returns (address)",
+  "event EscrowCreated(address indexed creator, address escrowAddress)"
+];
+
+const escrowABI = [
+  "function depositA() external",
+  "function depositB() external",
+  "function settle() external",
+  "function refundA() external",
+  "function refundB() external",
+  "function depositedA() view returns (bool)",
+  "function depositedB() view returns (bool)"
+];
+
+let provider, signer, userAddr;
+const log = msg => { document.getElementById('log').innerText = msg; console.log(msg); };
+
+async function connect() {
+  if (!window.ethereum) return alert("MetaMask / Web3 wallet not found");
+  provider = new ethers.BrowserProvider(window.ethereum);
+  await provider.send("eth_requestAccounts", []);
+  signer = await provider.getSigner();
+  userAddr = await signer.getAddress();
+  document.getElementById('walletInfo').innerText = `Connected: ${userAddr}`;
+}
+
+async function createEscrow() {
+  try {
+    const f = new ethers.Contract(factoryAddress, factoryABI, signer);
+    const tx = await f.createEscrow(
+      document.getElementById("partyA").value,
+      document.getElementById("partyB").value,
+      document.getElementById("tokenA").value,
+      document.getElementById("tokenB").value,
+      document.getElementById("amountA").value,
+      document.getElementById("amountB").value,
+      document.getElementById("deadline").value
+    );
+    log("⏳ Creating escrow...");
+    const rcpt = await tx.wait();
+    const evt = rcpt.logs?.find(l => l.fragment?.name === "EscrowCreated");
+    const addr = evt ? evt.args.escrowAddress : "unknown";
+    log(`✅ Escrow created at ${addr}`);
+    document.getElementById("escrowAddress").value = addr;
+  } catch(err){ log("Error: "+err.message); }
+}
+
+function escrowInstance() {
+  const addr = document.getElementById("escrowAddress").value.trim();
+  if (!ethers.isAddress(addr)) { alert("Invalid escrow address"); throw "Invalid address"; }
+  return new ethers.Contract(addr, escrowABI, signer);
+}
+
+async function approve(tokenAddr, amount) {
+  try {
+    const token = new ethers.Contract(tokenAddr, ["function approve(address,uint256) public returns (bool)"], signer);
+    const tx = await token.approve(document.getElementById("escrowAddress").value, amount);
+    log("Approving...");
+    await tx.wait();
+    log("✅ Approved");
+  } catch (err) { log("Approval error: " + err.message); }
+}
+
+async function approveA(){ await approve(document.getElementById("tokenA").value, document.getElementById("amountA").value); }
+async function approveB(){ await approve(document.getElementById("tokenB").value, document.getElementById("amountB").value); }
+
+async function depositA(){ await escrowInstance().depositA().then(tx=>tx.wait()).then(()=>{log("Deposited A"); readStatus();}); }
+async function depositB(){ await escrowInstance().depositB().then(tx=>tx.wait()).then(()=>{log("Deposited B"); readStatus();}); }
+async function settle(){ await escrowInstance().settle().then(tx=>tx.wait()).then(()=>log("✅ Settled successfully")); }
+async function refundA(){ await escrowInstance().refundA().then(tx=>tx.wait()).then(()=>log("Refunded A")); }
+async function refundB(){ await escrowInstance().refundB().then(tx=>tx.wait()).then(()=>log("Refunded B")); }
+
+async function readStatus() {
+  try {
+    const e = escrowInstance();
+    const [a,b] = await Promise.all([e.depositedA(), e.depositedB()]);
+    document.getElementById('statusBox').innerText =
+      `Status:\nParty A deposited: ${a}\nParty B deposited: ${b}`;
+  } catch(err){ document.getElementById('statusBox').innerText = "Status read error."; }
+}
+
+document.getElementById('connectBtn').onclick = connect;
+document.getElementById('createEscrowBtn').onclick = createEscrow;
+document.getElementById('approveA').onclick = approveA;
+document.getElementById('approveB').onclick = approveB;
+document.getElementById('depositA').onclick = depositA;
+document.getElementById('depositB').onclick = depositB;
+document.getElementById('settle').onclick = settle;
+document.getElementById('refundA').onclick = refundA;
+document.getElementById('refundB').onclick = refundB;
+</script>
+</body>
+</html>
