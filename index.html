@@ -48,25 +48,25 @@
       display:flex; justify-content:center; align-items:center;
       gap:16px; margin-bottom:10px;
     }
-    .logo-row img {
-      width:96px; height:96px; object-fit:contain;
-      filter:drop-shadow(0 0 4px rgba(0,0,0,0.4));
+    .crow { font-size:60px; line-height:1; }
+    .factory-toggle {
+      display:flex; justify-content:center; gap:12px;
+      margin-bottom:12px; font-size:0.9em;
     }
   </style>
 </head>
 
 <body>
-  <!-- ⚡ Handshake Header -->
+  <!-- ⚡ Crow Header -->
   <div class="logo-row">
     <span style="font-size:36px;">⚡</span>
-    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Handshake_icon.svg/512px-Handshake_icon.svg.png"
-         alt="Handshake Logo">
+    <span class="crow">🐦‍⬛</span>
     <span style="font-size:36px;">⚡</span>
   </div>
   <h1 style="margin-top:0;">Pulsecrow</h1>
   <p style="text-align:center;">
     Trustless two-deposit escrow on <b>PulseChain</b><br>
-    0.5 % fee → <code>0xF84b1110F14Bd7D5fEEEe033AbF4bC24e829A06c</code>
+    Fee wallet: <code>0xF84b1110F14Bd7D5fEEEe033AbF4bC24e829A06c</code>
   </p>
 
   <button id="connectBtn">🔗 Connect Wallet</button>
@@ -76,6 +76,12 @@
   <!-- CREATE ESCROW -->
   <div class="section">
     <h2>Create New Escrow</h2>
+
+    <div class="factory-toggle">
+      <label><input type="radio" name="factorySelect" value="fee" checked> 0.5% Fee (supports Pulsecrow)</label>
+      <label><input type="radio" name="factorySelect" value="nofee"> No Fee</label>
+    </div>
+
     <input id="partyB" placeholder="Counterparty address (Party B)" />
 
     <input id="tokenA" placeholder="Your token (Token A) address" />
@@ -113,7 +119,10 @@
   <div id="log" class="small"></div>
 
   <script>
-    const factoryAddress = "0x1ea0a16CF8677013a61612127B3d387FE4622497";
+    // === FACTORY ADDRESSES ===
+    const FACTORY_FEE = "0x1ea0a16CF8677013a61612127B3d387FE4622497";
+    const FACTORY_NOFEE = "0x6a8359FB0204C5A5a52b7ecf3bbb76299DE16EfF";
+
     const ESTEEM_TOKEN = "0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5";
     const ESTEEM_DECIMALS = 18;
 
@@ -133,6 +142,10 @@
     let provider, signer, userAddr;
     function log(msg){document.getElementById("log").innerText=msg;console.log(msg);}
     function toWei(amount,dec){return BigInt(Math.round(parseFloat(amount)*10**dec));}
+    function getSelectedFactory(){
+      const selected=document.querySelector('input[name="factorySelect"]:checked').value;
+      return selected==="fee"?FACTORY_FEE:FACTORY_NOFEE;
+    }
 
     async function connect(){
       try{
@@ -149,7 +162,7 @@
 
     async function createEscrow(){
       try{
-        const f=new ethers.Contract(factoryAddress,factoryABI,signer);
+        const f=new ethers.Contract(getSelectedFactory(),factoryABI,signer);
         const amtA=toWei(document.getElementById("amountA").value,parseInt(document.getElementById("decA").value));
         const amtB=toWei(document.getElementById("amountB").value,parseInt(document.getElementById("decB").value));
         const minutes=parseInt(document.getElementById("deadline").value);
