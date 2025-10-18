@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pulsecrow – Simple Two-Party Escrow on PulseChain</title>
+  <title>Pulsecrow – Trustless Two-Party Escrow on PulseChain</title>
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.1/dist/ethers.umd.min.js"></script>
   <style>
     :root { --primary:#0084ff; --bg:#f8fafc; --text:#222; }
@@ -133,7 +133,7 @@
 
   <div id="instructions">
     <b>How to use Pulsecrow:</b><br><br>
-    <b>1.</b> Click <b>“Connect Wallet”</b> and select your PulseChain wallet (OKX or MetaMask).<br>
+    <b>1.</b> Click <b>“Connect Wallet”</b> and select your PulseChain wallet (e.g. OKX or MetaMask).<br>
     <b>2.</b> Decide if you want to <b>create</b> a new escrow or <b>join</b> an existing one.<br><br>
     <u>To create a new escrow:</u><br>
     • Enter your counterparty’s wallet address (Party B).<br>
@@ -151,7 +151,7 @@
     ⚠️ <b>Important:</b> Native PLS cannot be used directly as a token.<br>
     To use PLS, wrap it to <b>WPLS</b> (1 PLS = 1 WPLS) and use<br>
     <code>0xA10D38C309b7B86a0E0F34218c5a620b6245Ff96</code> as the token address.<br><br>
-    <i>All escrows are created and verified on-chain via the official Pulsecrow factory.</i><br>
+    <i>All escrows are created and verified on-chain via the official Pulsecrow factory contract.</i><br>
     <a href="#" style="display:block;margin-top:10px;text-align:center;color:#0084ff;">⬆️ Back to top</a>
     <hr style="margin:20px 0;">
     <p style="font-size:13px; text-align:center;">
@@ -207,3 +207,4 @@
   </script>
 </body>
 </html>
+
