@@ -33,7 +33,10 @@
     }
     .small{font-size:0.9em;color:#555;}
     .section{margin-top:30px;}
-    label{font-size:0.9em;margin-left:4px;}
+    .esteem-toggle {
+      display:flex; align-items:center; gap:6px; margin:4px 0 10px 0;
+      font-size:0.9em;
+    }
   </style>
 </head>
 
@@ -53,16 +56,18 @@
     <h2>Create New Escrow</h2>
     <input id="partyB" placeholder="Counterparty address (Party B)" />
 
-    <div>
-      <input id="tokenA" placeholder="Your token (Token A) address" />
-      <label><input type="checkbox" id="useEsteemA"> Use Esteem</label>
+    <input id="tokenA" placeholder="Your token (Token A) address" />
+    <div class="esteem-toggle">
+      <input type="checkbox" id="useEsteemA">
+      <label for="useEsteemA">Use Esteem for Token A</label>
     </div>
     <input id="amountA" placeholder="Your amount (e.g. 1.5)" />
     <input id="decA" placeholder="Token A decimals (e.g. 18)" />
 
-    <div>
-      <input id="tokenB" placeholder="Their token (Token B) address" />
-      <label><input type="checkbox" id="useEsteemB"> Use Esteem</label>
+    <input id="tokenB" placeholder="Their token (Token B) address" />
+    <div class="esteem-toggle">
+      <input type="checkbox" id="useEsteemB">
+      <label for="useEsteemB">Use Esteem for Token B</label>
     </div>
     <input id="amountB" placeholder="Their amount (e.g. 100)" />
     <input id="decB" placeholder="Token B decimals (e.g. 18)" />
