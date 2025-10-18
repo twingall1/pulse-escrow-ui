@@ -226,7 +226,7 @@
         const evt=rcpt.logs?.find(l=>l.fragment?.name==="EscrowCreated");
         const addr=evt?evt.args.escrowAddress:"(unknown)";
         document.getElementById("newEscrow").innerText=`✅ Escrow created at: ${addr}`;
-        const shareLink=`${window.location.origin}?escrow=${addr}`;
+        const shareLink = `${window.location.origin}${window.location.pathname}?escrow=${addr}`;
         document.getElementById("newEscrow").innerHTML=`✅ Escrow created at: <br><code>${addr}</code><br><br>Share link:<br><a href="${shareLink}" target="_blank">${shareLink}</a>`;
         document.getElementById("escrowAddr").value=addr;
       }catch(e){log("Error: "+e.message);}
@@ -319,4 +319,5 @@
   </script>
 </body>
 </html>
+
 
