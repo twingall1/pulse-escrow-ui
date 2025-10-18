@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pulsecrow – Trustless Two-Party Escrow on PulseChain</title>
+  <title>PulsEscrow – Trustless Two-Party Escrow on PulseChain</title>
 
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.1/dist/ethers.umd.min.js"></script>
 
@@ -53,6 +53,23 @@
       display:flex; justify-content:center; gap:12px;
       margin-bottom:12px; font-size:0.9em;
     }
+
+    /* Loading overlay */
+    #loadingOverlay {
+      position:fixed; top:0; left:0; right:0; bottom:0;
+      background:rgba(255,255,255,0.85);
+      display:none; align-items:center; justify-content:center;
+      flex-direction:column; font-size:1.2em; color:#333; z-index:999999;
+    }
+    .spinner {
+      border:4px solid #ccc;
+      border-top:4px solid var(--primary);
+      border-radius:50%;
+      width:42px; height:42px;
+      animation:spin 1s linear infinite;
+      margin-bottom:12px;
+    }
+    @keyframes spin {100% {transform:rotate(360deg);}}
   </style>
 </head>
 
@@ -63,7 +80,7 @@
     <span class="crow">🐦‍⬛</span>
     <span style="font-size:36px;">⚡</span>
   </div>
-  <h1 style="margin-top:0;">Pulsecrow</h1>
+  <h1 style="margin-top:0;">PulsEscrow</h1>
   <p style="text-align:center;">
     Trustless two-deposit escrow on <b>PulseChain</b><br>
     Fee wallet: <code>0xF84b1110F14Bd7D5fEEEe033AbF4bC24e829A06c</code>
@@ -78,7 +95,7 @@
     <h2>Create New Escrow</h2>
 
     <div class="factory-toggle">
-      <label><input type="radio" name="factorySelect" value="fee" checked> 0.5% Fee (supports Pulsecrow)</label>
+      <label><input type="radio" name="factorySelect" value="fee" checked> 0.5% Fee (supports PulsEscrow)</label>
       <label><input type="radio" name="factorySelect" value="nofee"> No Fee</label>
     </div>
 
@@ -118,6 +135,12 @@
 
   <div id="log" class="small"></div>
 
+  <!-- Loading overlay -->
+  <div id="loadingOverlay">
+    <div class="spinner"></div>
+    <div>⏳ Waiting for confirmation...</div>
+  </div>
+
   <script>
     // === FACTORY ADDRESSES ===
     const FACTORY_FEE = "0x1ea0a16CF8677013a61612127B3d387FE4622497";
@@ -147,6 +170,10 @@
       return selected==="fee"?FACTORY_FEE:FACTORY_NOFEE;
     }
 
+    function showLoading(show=true){
+      document.getElementById("loadingOverlay").style.display = show ? "flex" : "none";
+    }
+
     async function connect(){
       try{
         if(!window.ethereum)return alert("Please install MetaMask or OKX Wallet.");
@@ -162,6 +189,7 @@
 
     async function createEscrow(){
       try{
+        showLoading(true);
         const f=new ethers.Contract(getSelectedFactory(),factoryABI,signer);
         const amtA=toWei(document.getElementById("amountA").value,parseInt(document.getElementById("decA").value));
         const amtB=toWei(document.getElementById("amountB").value,parseInt(document.getElementById("decB").value));
@@ -180,6 +208,7 @@
         document.getElementById("newEscrow").innerText=`✅ Escrow created at: ${addr}`;
         document.getElementById("escrowAddr").value=addr;
       }catch(e){log("Error: "+e.message);}
+      finally{showLoading(false);}
     }
 
     function getEscrow(){
@@ -190,6 +219,7 @@
 
     async function approve(){
       try{
+        showLoading(true);
         const e=getEscrow();
         const a=await e.partyA(),b=await e.partyB();
         const isA=userAddr.toLowerCase()===a.toLowerCase();
@@ -199,28 +229,23 @@
         const tx=await token.approve(document.getElementById("escrowAddr").value,amt);
         await tx.wait();log("✅ Approved");
       }catch(e){log("Approval error: "+e.message);}
+      finally{showLoading(false);}
     }
 
     async function deposit(){
       try{
+        showLoading(true);
         const e=getEscrow();
         const a=await e.partyA(),b=await e.partyB();
         const isA=userAddr.toLowerCase()===a.toLowerCase();
         const tx=await(isA?e.depositA():e.depositB());
         await tx.wait();log("✅ Deposit complete.");readStatus();
       }catch(e){log("Deposit error: "+e.message);}
+      finally{showLoading(false);}
     }
 
-    async function settle(){try{const tx=await getEscrow().settle();await tx.wait();log("✅ Settled.");}catch(e){log("Settle error: "+e.message);}}
-    async function refund(){
-      try{
-        const e=getEscrow();
-        const a=await e.partyA(),b=await e.partyB();
-        const isA=userAddr.toLowerCase()===a.toLowerCase();
-        const tx=await(isA?e.refundA():e.refundB());
-        await tx.wait();log("✅ Refunded.");
-      }catch(e){log("Refund error: "+e.message);}
-    }
+    async function settle(){try{showLoading(true);const tx=await getEscrow().settle();await tx.wait();log("✅ Settled.");}catch(e){log("Settle error: "+e.message);}finally{showLoading(false);}}
+    async function refund(){try{showLoading(true);const e=getEscrow();const a=await e.partyA(),b=await e.partyB();const isA=userAddr.toLowerCase()===a.toLowerCase();const tx=await(isA?e.refundA():e.refundB());await tx.wait();log("✅ Refunded.");}catch(e){log("Refund error: "+e.message);}finally{showLoading(false);}}
 
     async function readStatus(){
       try{
