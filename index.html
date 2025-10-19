@@ -40,6 +40,7 @@
   <div id="walletInfo" class="small"></div>
   <hr>
 
+  <!-- CREATE ESCROW -->
   <div class="section">
     <h2>Create Escrow</h2>
     <input id="partyB" placeholder="Counterparty address (Party B)" />
@@ -61,19 +62,36 @@
     <div id="newEscrow" class="small"></div>
   </div>
 
+  <!-- JOIN ESCROW -->
   <div class="section">
     <h2>Join Escrow</h2>
-    <input id="escrowAddr" placeholder="Paste escrow address" />
-    <button id="verifyBtn">Verify Inputs vs On-Chain</button>
+    <input id="escrowAddr" placeholder="Paste escrow address or open link" />
+    <div id="verifyBadge"></div>
+
+    <h3>Verify Token A</h3>
+    <div class="token-choice" id="verifyAchoices"></div>
+    <input id="verifyTokenA" placeholder="Token A address (auto-disabled if native PLS)" />
+    <input id="verifyAmtA" placeholder="Token A amount (e.g. 1.5)" />
+    <input id="verifyDecA" placeholder="Token A decimals (e.g. 18)" />
+
+    <h3>Verify Token B</h3>
+    <div class="token-choice" id="verifyBchoices"></div>
+    <input id="verifyTokenB" placeholder="Token B address (auto-disabled if native PLS)" />
+    <input id="verifyAmtB" placeholder="Token B amount (e.g. 100)" />
+    <input id="verifyDecB" placeholder="Token B decimals (e.g. 18)" />
+
+    <button id="verifyBtn">Verify Inputs</button>
     <button id="approveBtn" disabled>Approve My Token</button>
     <button id="depositBtn" disabled>Deposit My Token</button>
     <button id="settleBtn" disabled>Settle</button>
     <button id="refundBtn" disabled>Refund</button>
+
     <div id="statusBox">Status: not connected</div>
   </div>
 
   <div id="loadingOverlay"><div class="spinner"></div><div>⏳ Waiting for confirmation…</div></div>
 
+  <!-- INSTRUCTIONS -->
   <div id="instructions">
     <b>How to use Pulsecrow:</b><br><br>
     <b>1.</b> Connect your wallet (MetaMask or OKX).<br>
@@ -86,12 +104,12 @@
     • You’ll get a link — <b>share this link with your counterparty.</b><br><br>
     <u>Joining an escrow:</u><br>
     • Open the link or paste the escrow address.<br>
-    • Input the same tokens and amounts as Party A.<br>
-    • Click <b>Verify Inputs vs On-Chain</b> to confirm a match.<br>
-    • Only when all details match can you <b>Approve</b> and <b>Deposit.</b><br>
-    • Once both deposit, either party may <b>Settle.</b><br>
-    • If the deadline expires and the other party never deposited, click <b>Refund.</b><br><br>
-    ⚠️ <b>Native PLS</b> can be used directly (no approve step). All other tokens must be whitelisted ERC-20s.<br><br>
+    • Enter the same token selections and amounts as Party A.<br>
+    • Click <b>Verify Inputs</b> to confirm a match with on-chain data.<br>
+    • When verified, Approve/Deposit buttons will unlock.<br>
+    • Once both deposit, either side may <b>Settle</b>.<br>
+    • If deadline passes without both deposits, click <b>Refund</b>.<br><br>
+    ⚠️ <b>Native PLS</b> can be used directly (no approval step).<br><br>
     <p style="text-align:center;font-size:13px;">
       🔍 Official verified Pulsecrow factory contract:<br>
       <a href="https://scan.pulsechain.com/address/0xb42529b2A66FD430a872788c83b10B285886b963"
@@ -120,122 +138,57 @@
     "function depositA() external payable","function depositB() external payable",
     "function settle() external","function refundA() external","function refundB() external"
   ];
-
   let provider,signer,user;
   const toWei=(a,d)=>BigInt(Math.round(parseFloat(a)*10**d));
   const showLoad=s=>document.getElementById("loadingOverlay").style.display=s?"flex":"none";
 
   function buildChoices(){
-    ["A","B"].forEach(side=>{
-      const box=document.getElementById(`token${side}choices`);
+    ["A","B","verifyA","verifyB"].forEach(side=>{
+      const box=document.getElementById(`${side}choices`);
+      if(!box)return;
       TOKENS.forEach(t=>{
         const el=document.createElement("label");
         el.innerHTML=`<input type="radio" name="token${side}" value="${t.addr}" data-dec="${t.dec}">${t.name}`;
         el.querySelector("input").onchange=()=>{
-          document.getElementById(`token${side}`).value=t.addr;
-          document.getElementById(`dec${side}`).value=t.dec;
-          document.getElementById(`token${side}`).disabled=(t.addr==="0x0000000000000000000000000000000000000000");
+          const prefix=side.startsWith("verify")?"verify":"token";
+          const suffix=side.replace(prefix,"");
+          const addrField=document.getElementById(`${prefix}${suffix}Token${suffix?"":"A"}`);
+          const decField=document.getElementById(`${prefix}${suffix}Dec${suffix?"":"A"}`);
         };
-        box.appendChild(el);
       });
     });
   }
 
-  async function connect(){
-    if(!window.ethereum)return alert("Install MetaMask or OKX Wallet");
-    provider=new ethers.BrowserProvider(window.ethereum);
-    await provider.send("eth_requestAccounts",[]);
-    signer=await provider.getSigner(); user=await signer.getAddress();
-    document.getElementById("walletInfo").innerText=`Connected: ${user}`;
-    document.getElementById("createBtn").disabled=false;
-  }
-
-  async function createEscrow(){
-    try{
-      showLoad(true);
-      const f=new ethers.Contract(FACTORY,factoryABI,signer);
-      const amtA=toWei(document.getElementById("amountA").value,parseInt(document.getElementById("decA").value));
-      const amtB=toWei(document.getElementById("amountB").value,parseInt(document.getElementById("decB").value));
-      const mins=parseInt(document.getElementById("deadline").value)||30;
-      const dl=Math.floor(Date.now()/1000)+mins*60;
-      const tokenA=document.getElementById("tokenA").value;
-      const tokenB=document.getElementById("tokenB").value;
-      const tx=await f.createEscrow(user,document.getElementById("partyB").value,tokenA,tokenB,amtA,amtB,dl);
-      const rc=await tx.wait();
-      const ev=rc.logs?.find(l=>l.fragment?.name==="EscrowCreated");
-      const addr=ev?ev.args.escrowAddress:"?";
-      const link=`${location.origin}${location.pathname}?escrow=${addr}`;
-      document.getElementById("newEscrow").innerHTML=`✅ Escrow created at:<br><code>${addr}</code><br>🔗 Share this link with your counterparty:<br><a href="${link}" target="_blank">${link}</a>`;
-      document.getElementById("escrowAddr").value=addr;
-    }catch(e){alert(e.message);}finally{showLoad(false);}
-  }
+  async function connect(){if(!window.ethereum)return alert("Install MetaMask or OKX");provider=new ethers.BrowserProvider(window.ethereum);await provider.send("eth_requestAccounts",[]);signer=await provider.getSigner();user=await signer.getAddress();document.getElementById("walletInfo").innerText=`Connected: ${user}`;document.getElementById("createBtn").disabled=false;}
 
   async function verifyUserBInputs(){
     try{
       const esc=document.getElementById("escrowAddr").value.trim();
-      if(!ethers.isAddress(esc))return alert("Bad escrow address");
-      const e=new ethers.Contract(esc,escrowABI,signer||provider);
+      if(!ethers.isAddress(esc))return alert("Invalid escrow address");
+      if(!provider)provider=new ethers.BrowserProvider(window.ethereum||null);
+      const e=new ethers.Contract(esc,escrowABI,provider);
       const [onA,onB,onAmtA,onAmtB]=await Promise.all([e.tokenA(),e.tokenB(),e.amountA(),e.amountB()]);
-      const inA=document.getElementById("tokenA").value.trim();
-      const inB=document.getElementById("tokenB").value.trim();
-      const valA=parseFloat(document.getElementById("amountA").value);
-      const valB=parseFloat(document.getElementById("amountB").value);
-      const decA=parseInt(document.getElementById("decA").value)||18;
-      const decB=parseInt(document.getElementById("decB").value)||18;
-      if(isNaN(valA)||isNaN(valB)){
-        document.getElementById("statusBox").innerText="⚠️ Enter valid numeric amounts before verifying.";return;
-      }
-      const amtA=toWei(valA,decA); const amtB=toWei(valB,decB);
+      const inA=document.getElementById("verifyTokenA").value.trim();
+      const inB=document.getElementById("verifyTokenB").value.trim();
+      const valA=parseFloat(document.getElementById("verifyAmtA").value);
+      const valB=parseFloat(document.getElementById("verifyAmtB").value);
+      const decA=parseInt(document.getElementById("verifyDecA").value)||18;
+      const decB=parseInt(document.getElementById("verifyDecB").value)||18;
+      if(isNaN(valA)||isNaN(valB)){document.getElementById("statusBox").innerText="⚠️ Enter valid numeric amounts before verifying.";return;}
+      const amtA=toWei(valA,decA),amtB=toWei(valB,decB);
       const match=inA.toLowerCase()===onA.toLowerCase()&&inB.toLowerCase()===onB.toLowerCase()&&amtA===onAmtA&&amtB===onAmtB;
       ["approveBtn","depositBtn","settleBtn","refundBtn"].forEach(id=>document.getElementById(id).disabled=!match);
-      document.getElementById("statusBox").innerText=match?"✅ Inputs match on-chain, you can proceed.":"⚠️ Inputs mismatch – check tokens and amounts.";
+      document.getElementById("statusBox").innerText=match?"✅ Inputs match on-chain. You can proceed.":"⚠️ Inputs mismatch – check tokens and amounts.";
     }catch(err){document.getElementById("statusBox").innerText="Verify error: "+err.message;}
   }
 
-  async function approve(){try{showLoad(true);
-    const e=new ethers.Contract(document.getElementById("escrowAddr").value,escrowABI,signer);
-    const a=await e.partyA(),b=await e.partyB();
-    const isA=user.toLowerCase()===a.toLowerCase();
-    const tokenAddr=isA?await e.tokenA():await e.tokenB();
-    if(tokenAddr==="0x0000000000000000000000000000000000000000")return alert("No approval needed for native PLS");
-    const amt=isA?await e.amountA():await e.amountB();
-    const t=new ethers.Contract(tokenAddr,["function approve(address,uint256) returns(bool)"],signer);
-    const tx=await t.approve(document.getElementById("escrowAddr").value,amt);await tx.wait();
-    document.getElementById("statusBox").innerText="✅ Approved";
-  }catch(e){alert(e.message);}finally{showLoad(false);}}
-
-  async function deposit(){try{showLoad(true);
-    const e=new ethers.Contract(document.getElementById("escrowAddr").value,escrowABI,signer);
-    const a=await e.partyA(),b=await e.partyB();
-    const isA=user.toLowerCase()===a.toLowerCase();
-    const token=isA?await e.tokenA():await e.tokenB();
-    const amt=isA?await e.amountA():await e.amountB();
-    const tx=token==="0x0000000000000000000000000000000000000000"?
-      await(isA?e.depositA({value:amt}):e.depositB({value:amt})):
-      await(isA?e.depositA():e.depositB());
-    await tx.wait();document.getElementById("statusBox").innerText="✅ Deposit complete";
-  }catch(e){alert(e.message);}finally{showLoad(false);}}
-
-  async function settle(){try{showLoad(true);const e=new ethers.Contract(document.getElementById("escrowAddr").value,escrowABI,signer);await(await e.settle()).wait();document.getElementById("statusBox").innerText="✅ Settled";}catch(e){alert(e.message);}finally{showLoad(false);}}
-  async function refund(){try{showLoad(true);const e=new ethers.Contract(document.getElementById("escrowAddr").value,escrowABI,signer);const a=await e.partyA(),b=await e.partyB();const isA=user.toLowerCase()===a.toLowerCase();await(await(isA?e.refundA():e.refundB())).wait();document.getElementById("statusBox").innerText="✅ Refunded";}catch(e){alert(e.message);}finally{showLoad(false);}}
-
   document.getElementById("connectBtn").onclick=connect;
-  document.getElementById("createBtn").onclick=createEscrow;
   document.getElementById("verifyBtn").onclick=verifyUserBInputs;
-  document.getElementById("approveBtn").onclick=approve;
-  document.getElementById("depositBtn").onclick=deposit;
-  document.getElementById("settleBtn").onclick=settle;
-  document.getElementById("refundBtn").onclick=refund;
   buildChoices();
 
-  // Auto-fill escrow param if opened via link
   const params=new URLSearchParams(window.location.search);
   const escrowParam=params.get("escrow");
-  if(escrowParam){
-    document.getElementById("escrowAddr").value=escrowParam;
-    document.getElementById("statusBox").innerText="🔍 Escrow loaded from link: "+escrowParam;
-    window.scrollTo({top:document.querySelector("#escrowAddr").offsetTop-60,behavior:"smooth"});
-  }
+  if(escrowParam){document.getElementById("escrowAddr").value=escrowParam;document.getElementById("statusBox").innerText="🔍 Escrow loaded: "+escrowParam;}
   </script>
 </body>
 </html>
