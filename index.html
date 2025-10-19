@@ -19,21 +19,18 @@ button:hover:enabled{background:#006edc;}
 .section{margin-top:30px;}
 .token-choice{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;}
 .token-choice label{display:flex;align-items:center;gap:4px;background:#fff;
-                    border:1px solid #ccc;padding:4px 8px;border-radius:6px;cursor:pointer;}
+  border:1px solid #ccc;padding:4px 8px;border-radius:6px;cursor:pointer;}
 .divider{border-top:3px solid #ddd;margin:40px 0;}
 .logo-row{display:flex;justify-content:center;align-items:center;gap:16px;margin-bottom:10px;}
 .crow{font-size:60px;line-height:1;}
 #statusBox{background:#fff;border:1px solid #ddd;border-radius:8px;
             padding:10px;margin-top:10px;white-space:pre-wrap;}
-#loadingOverlay{position:fixed;top:0;left:0;right:0;bottom:0;
-                background:rgba(255,255,255,0.85);display:none;
-                align-items:center;justify-content:center;flex-direction:column;
-                font-size:1.2em;color:#333;z-index:999999;}
+#loadingOverlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,0.85);
+  display:none;align-items:center;justify-content:center;flex-direction:column;font-size:1.2em;color:#333;z-index:999999;}
 .spinner{border:4px solid #ccc;border-top:4px solid #0084ff;border-radius:50%;
-          width:42px;height:42px;animation:spin 1s linear infinite;margin-bottom:12px;}
+  width:42px;height:42px;animation:spin 1s linear infinite;margin-bottom:12px;}
 @keyframes spin{100%{transform:rotate(360deg);}}
-#instructions{background:#fff;border:1px solid #ddd;border-radius:10px;
-              padding:16px;margin-top:40px;font-size:14px;line-height:1.55;}
+#instructions{background:#fff;border:1px solid #ddd;border-radius:10px;padding:16px;margin-top:40px;font-size:14px;line-height:1.55;}
 .verify-box{background:#eef4ff;border:1px solid #c9dbff;padding:16px;border-radius:10px;margin-top:10px;}
 </style>
 </head>
@@ -153,18 +150,19 @@ const showLoad=s=>document.getElementById("loadingOverlay").style.display=s?"fle
 
 function buildChoices(){
  ["A","B","verifyA","verifyB"].forEach(side=>{
-  const box=document.getElementById(`${side}choices`);if(!box)return;
+  const box=document.getElementById(`${side}choices`);
+  if(!box)return;
   TOKENS.forEach(t=>{
    const el=document.createElement("label");
    el.innerHTML=`<input type="radio" name="token${side}" value="${t.addr}" data-dec="${t.dec}">${t.name}`;
    el.querySelector("input").onchange=()=>{
-    const prefix=side.includes("verify")?"verify":"";
-    const tokenId=`${prefix}${prefix?"Token":side.includes("A")?"tokenA":"tokenB"}`;
-   };
-   el.querySelector("input").onchange=()=>{
-    const addr=document.getElementById(`${side.includes("verify")?"verifyToken":"token"}${side.replace("verify","")}`);
-    const dec=document.getElementById(`${side.includes("verify")?"verifyDec":"dec"}${side.replace("verify","")}`);
-    addr.value=t.addr;dec.value=t.dec;addr.disabled=(t.addr==="0x0000000000000000000000000000000000000000");
+    const isVerify=side.includes("verify");
+    const base=isVerify?"verify":"";
+    const suffix=side.replace("verify","");
+    const addr=document.getElementById(`${base}Token${suffix}`);
+    const dec=document.getElementById(`${base}Dec${suffix}`);
+    addr.value=t.addr;dec.value=t.dec;
+    addr.disabled=(t.addr==="0x0000000000000000000000000000000000000000");
    };
    box.appendChild(el);
   });
@@ -193,7 +191,8 @@ async function verifyUserBInputs(){
   const valB=parseFloat(document.getElementById("verifyAmtB").value);
   const decA=parseInt(document.getElementById("verifyDecA").value)||18;
   const decB=parseInt(document.getElementById("verifyDecB").value)||18;
-  if(isNaN(valA)||isNaN(valB)){document.getElementById("statusBox").innerText="⚠️ Enter valid numeric amounts before verifying.";return;}
+  if(isNaN(valA)||isNaN(valB)){
+   document.getElementById("statusBox").innerText="⚠️ Enter valid numeric amounts before verifying.";return;}
   const amtA=toWei(valA,decA),amtB=toWei(valB,decB);
   const match=inA.toLowerCase()===onA.toLowerCase()&&inB.toLowerCase()===onB.toLowerCase()&&amtA===onAmtA&&amtB===onAmtB;
   ["approveBtn","depositBtn","settleBtn","refundBtn"].forEach(id=>document.getElementById(id).disabled=!match);
@@ -207,8 +206,10 @@ buildChoices();
 
 const params=new URLSearchParams(window.location.search);
 const escrowParam=params.get("escrow");
-if(escrowParam){document.getElementById("escrowAddr").value=escrowParam;
- document.getElementById("statusBox").innerText="🔍 Escrow loaded: "+escrowParam;}
+if(escrowParam){
+ document.getElementById("escrowAddr").value=escrowParam;
+ document.getElementById("statusBox").innerText="🔍 Escrow loaded: "+escrowParam;
+}
 </script>
 </body>
 </html>
