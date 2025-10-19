@@ -7,23 +7,27 @@
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.1/dist/ethers.umd.min.js"></script>
 <style>
   body{font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:760px;margin:32px auto;padding:18px;background:#f8fafc;color:#111}
-  h1,h2{margin:0 0 8px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:14px 0}
+  h1,h2{margin:0 0 8px}
+  .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:14px 0}
   input,button{width:100%;padding:10px;margin:6px 0;border-radius:8px;border:1px solid #cbd5e1;font-size:15px}
   button{background:#2563eb;color:#fff;border:none;font-weight:600;cursor:pointer}
   button:disabled{background:#9ca3af;cursor:not-allowed}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .muted{color:#555;font-size:13px}.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center}
+  .muted{color:#555;font-size:13px}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
   #overlay{position:fixed;inset:0;background:rgba(255,255,255,0.82);display:none;align-items:center;justify-content:center;flex-direction:column;z-index:99999}
   .spinner{border:4px solid #ddd;border-top:4px solid #2563eb;border-radius:50%;width:42px;height:42px;animation:spin 1s linear infinite;margin-bottom:12px}
   @keyframes spin{100%{transform:rotate(360deg)}}
   #instructions{background:#fff;border:1px solid #ddd;border-radius:10px;padding:16px;font-size:14px;margin-top:16px;line-height:1.55}
+  .checkmark{color:green;font-size:18px;margin-left:6px;display:none}
+  .done .checkmark{display:inline}
 </style>
 </head>
 <body>
 <h1>Pulsecrow</h1>
 <p class="muted">
-  One-sided escrow: Seller deposits <b>ESTEEM</b>; Buyer pays <b>PLS</b> in one click.
-  <br><a href="#instructions" style="color:#2563eb;text-decoration:none;">📘 View brief instructions</a>
+  Seller creates escrow contract and deposits <b>ESTEEM</b>; Buyer pays <b>PLS</b> in one click.<br>
+  <a href="#instructions" style="color:#2563eb;text-decoration:none;">📘 View brief instructions</a>
 </p>
 
 <div class="card">
@@ -33,13 +37,10 @@
 
 <div class="card">
   <h2>Create Escrow</h2>
-  <div class="row">
-    <input id="seller" placeholder="Seller address (will deposit ESTEEM)">
-    <input id="buyer" placeholder="Buyer address (will pay PLS)">
-  </div>
+  <input id="buyer" placeholder="Buyer address (will pay PLS)">
   <div class="row">
     <input id="esteemAmt" placeholder="ESTEEM amount (e.g. 15)">
-    <input id="pricePLS"  placeholder="Price in PLS (e.g. 2000)">
+    <input id="pricePLS" placeholder="Price in PLS (e.g. 2000)">
   </div>
   <input id="deadlineMins" placeholder="Deadline minutes from now (e.g. 30)">
   <button id="create" disabled>Create Escrow</button>
@@ -54,12 +55,14 @@
   <pre id="onchain" class="mono"></pre>
 
   <div class="row" style="margin-top:8px;">
-    <button id="approveEsteem" disabled>Seller: Approve ESTEEM</button>
-    <button id="depositEsteem" disabled>Seller: Deposit ESTEEM</button>
+    <div><button id="approveEsteem" disabled>Seller: Approve ESTEEM</button><span class="checkmark" id="checkApprove">✅</span></div>
+    <div><button id="depositEsteem" disabled>Seller: Deposit ESTEEM</button><span class="checkmark" id="checkDeposit">✅</span></div>
   </div>
 
-  <button id="buy" disabled>Buyer: Buy (send PLS)</button>
-  <button id="refund" disabled>Seller: Refund (after deadline)</button>
+  <div class="row">
+    <div><button id="buy" disabled>Buyer: Buy (send PLS)</button><span class="checkmark" id="checkBuy">✅</span></div>
+    <div><button id="refund" disabled>Seller: Refund (after deadline)</button><span class="checkmark" id="checkRefund">✅</span></div>
+  </div>
 </div>
 
 <div class="card">
@@ -72,172 +75,167 @@
 
 <div id="instructions">
   <b>Quick guide:</b><br><br>
-  1️⃣ <b>Seller</b> connects wallet and creates the escrow (enter buyer address, ESTEEM amount, price in PLS, and deadline).<br>
+  1️⃣ <b>Esteem seller</b> connects wallet and creates the escrow (enter buyer address, ESTEEM amount, price in PLS, and deadline).<br>
   2️⃣ Share the link or escrow address with the <b>Buyer</b>.<br>
   3️⃣ <b>Both</b> click “Load On-Chain Details” and check the printed numbers match what was agreed.<br>
-  4️⃣ <b>Seller</b> clicks “Approve ESTEEM”, then “Deposit ESTEEM”.<br>
+  4️⃣ <b>Seller</b> clicks “Approve ESTEEM”, then “Deposit ESTEEM.”<br>
   5️⃣ Once deposited, <b>Buyer</b> clicks “Buy (send PLS)” to complete the swap.<br>
-  6️⃣ If the Buyer never buys and the deadline passes, <b>Seller</b> clicks “Refund”.<br><br>
+  6️⃣ If the Buyer never buys and the deadline passes, <b>Seller</b> clicks “Refund.”<br><br>
   Always verify the on-chain values before acting. Pulsecrow never holds funds — only the escrow contract does.
 </div>
 
 <script>
-/*** CONFIG ***/
-const READONLY_RPC = "https://rpc.pulsechain.com";
-const FACTORY = "0x0000000000000000000000000000000000000000"; // replace after deploy
-const ESTEEM = "0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5";
-const DEC = 18;
+const FACTORY="0xb42529b2A66FD430a872788c83b10B285886b963";
+const ESTEEM="0x9FdCE721c528E6Dbc4F494F3e80B9b28A3059Ab5";
+const DEC=18;
+const READONLY_RPC="https://rpc.pulsechain.com";
 
-/*** ABIs ***/
-const factoryABI = [
-  "function createEscrow(address seller,address buyer,uint256 esteemAmount,uint256 pricePLS,uint256 deadline) external returns (address)",
-  "event EscrowCreated(address indexed creator,address escrow,address seller,address buyer,uint256 esteemAmount,uint256 pricePLS,uint256 deadline)"
+const factoryABI=[
+ "function createEscrow(address seller,address buyer,uint256 esteemAmount,uint256 pricePLS,uint256 deadline) external returns(address)",
+ "event EscrowCreated(address indexed creator,address escrow,address seller,address buyer,uint256 esteemAmount,uint256 pricePLS,uint256 deadline)"
 ];
-const escrowABI = [
-  "function seller() view returns(address)",
-  "function buyer() view returns(address)",
-  "function esteemAmount() view returns(uint256)",
-  "function pricePLS() view returns(uint256)",
-  "function deadline() view returns(uint256)",
-  "function deposited() view returns(bool)",
-  "function settled() view returns(bool)",
-  "function depositEsteem() external",
-  "function buy() external payable",
-  "function refund() external"
+const escrowABI=[
+ "function seller() view returns(address)",
+ "function buyer() view returns(address)",
+ "function esteemAmount() view returns(uint256)",
+ "function pricePLS() view returns(uint256)",
+ "function deadline() view returns(uint256)",
+ "function deposited() view returns(bool)",
+ "function settled() view returns(bool)",
+ "function depositEsteem() external",
+ "function buy() external payable",
+ "function refund() external"
 ];
-const erc20ABI = [
-  "function approve(address spender,uint256 amount) returns(bool)"
-];
-
-/*** Helpers ***/
-const $ = id=>document.getElementById(id);
+const erc20ABI=["function approve(address,uint256) returns(bool)"];
+const $=id=>document.getElementById(id);
 const toWei=v=>ethers.parseUnits(String(v),DEC);
-const toUnits=bn=>Number(ethers.formatUnits(bn,DEC));
+const toUnits=b=>Number(ethers.formatUnits(b,DEC));
 const showWait=b=>$("overlay").style.display=b?"flex":"none";
 const setStatus=m=>$("status").textContent=m;
 const setTurn=m=>$("turn").textContent=m;
 
-/*** State ***/
 let providerRO=new ethers.JsonRpcProvider(READONLY_RPC);
 let provider,signer,me;
 
-/*** Connect ***/
 $("connect").onclick=async()=>{
-  if(!window.ethereum)return alert("Install MetaMask or OKX Wallet");
-  provider=new ethers.BrowserProvider(window.ethereum);
-  await provider.send("eth_requestAccounts",[]);
-  signer=await provider.getSigner();
-  me=await signer.getAddress();
-  $("who").textContent=`Connected: ${me}`;
-  $("seller").value=me;
-  $("create").disabled=false;
+ if(!window.ethereum)return alert("Install MetaMask or OKX Wallet");
+ provider=new ethers.BrowserProvider(window.ethereum);
+ await provider.send("eth_requestAccounts",[]);
+ signer=await provider.getSigner();
+ me=await signer.getAddress();
+ $("who").textContent=`Connected: ${me}`;
+ $("create").disabled=false;
 };
 
-/*** Create ***/
 $("create").onclick=async()=>{
-  try{
-    if(!signer)return alert("Connect wallet");
-    const f=new ethers.Contract(FACTORY,factoryABI,signer);
-    const seller=$("seller").value.trim(),buyer=$("buyer").value.trim();
-    if(!ethers.isAddress(seller)||!ethers.isAddress(buyer))return alert("Bad addresses");
-    const esteemAmt=parseFloat($("esteemAmt").value),price=parseFloat($("pricePLS").value);
-    if(!(esteemAmt>0&&price>0))return alert("Amounts invalid");
-    const mins=parseInt($("deadlineMins").value)||30;
-    const dl=Math.floor(Date.now()/1000)+mins*60;
-    const predicted=await f.createEscrow.staticCall(seller,buyer,toWei(esteemAmt),toWei(price),dl);
-    showWait(true);
-    const tx=await f.createEscrow(seller,buyer,toWei(esteemAmt),toWei(price),dl);
-    const rc=await tx.wait();
-    let esc;
-    try{esc=rc.logs.map(l=>f.interface.parseLog(l)).find(p=>p?.name==="EscrowCreated")?.args?.escrow;}catch{esc=predicted;}
-    const link=`${location.origin}${location.pathname}?escrow=${esc}`;
-    $("created").innerHTML=`✅ Escrow created: <code>${esc}</code><br>Share this link:<br><a href="${link}" target="_blank">${link}</a>`;
-    $("escrow").value=esc;
-    setStatus("Escrow ready. Seller approves + deposits ESTEEM, then Buyer buys with PLS.");
-  }catch(e){alert("Create error: "+(e?.reason||e?.message||e));}
-  finally{showWait(false);}
+ try{
+  const f=new ethers.Contract(FACTORY,factoryABI,signer);
+  const seller=me.trim(),buyer=$("buyer").value.trim();
+  if(!ethers.isAddress(buyer))return alert("Bad buyer address");
+  const esteemAmt=parseFloat($("esteemAmt").value),price=parseFloat($("pricePLS").value);
+  if(!(esteemAmt>0&&price>0))return alert("Amounts invalid");
+  const mins=parseInt($("deadlineMins").value)||30;
+  const dl=Math.floor(Date.now()/1000)+mins*60;
+  const predicted=await f.createEscrow.staticCall(seller,buyer,toWei(esteemAmt),toWei(price),dl);
+  showWait(true);
+  const tx=await f.createEscrow(seller,buyer,toWei(esteemAmt),toWei(price),dl);
+  const rc=await tx.wait();
+  let esc;try{esc=rc.logs.map(l=>f.interface.parseLog(l)).find(p=>p?.name==="EscrowCreated")?.args?.escrow;}catch{esc=predicted;}
+  const link=`${location.origin}${location.pathname}?escrow=${esc}`;
+  $("created").innerHTML=`✅ Escrow created: <code>${esc}</code><br>Share this link with buyer:<br><a href="${link}" target="_blank">${link}</a>`;
+  $("escrow").value=esc;
+  setStatus("Escrow ready. Seller approves + deposits ESTEEM, then Buyer buys with PLS.");
+ }catch(e){alert("Create error: "+(e?.reason||e?.message||e));}
+ finally{showWait(false);}
 };
 
-/*** Load / Verify ***/
 $("load").onclick=async()=>{
-  try{
-    const esc=$("escrow").value.trim(); if(!ethers.isAddress(esc))return alert("Invalid address");
-    const e=new ethers.Contract(esc,escrowABI,provider||providerRO);
-    const [s,b,aE,pPLS,dl,dep,set]=await Promise.all([e.seller(),e.buyer(),e.esteemAmount(),e.pricePLS(),e.deadline(),e.deposited(),e.settled()]);
-    const lines=[
-      `seller:       ${s}`,
-      `buyer:        ${b}`,
-      `esteemAmount: ${toUnits(aE)}`,
-      `pricePLS:     ${toUnits(pPLS)}`,
-      `deadline:     ${new Date(Number(dl)*1000).toUTCString()}`,
-      `deposited:    ${dep}`,
-      `settled:      ${set}`
-    ];
-    $("onchain").textContent=lines.join("\n");
-    $("verifystatus").textContent="✅ On-chain details loaded.";
-    const am=me?me.toLowerCase():"";
-    const isSeller=am===s.toLowerCase();
-    const isBuyer=am===b.toLowerCase();
-    $("approveEsteem").disabled=!(isSeller&&!dep&&!set);
-    $("depositEsteem").disabled=!(isSeller&&!dep&&!set);
-    $("buy").disabled=!(isBuyer&&dep&&!set);
-    $("refund").disabled=!(isSeller&&dep&&!set&&(Math.floor(Date.now()/1000)>Number(dl)));
+ try{
+  const esc=$("escrow").value.trim();if(!ethers.isAddress(esc))return alert("Invalid address");
+  const e=new ethers.Contract(esc,escrowABI,provider||providerRO);
+  const [s,b,aE,pPLS,dl,dep,set]=await Promise.all([e.seller(),e.buyer(),e.esteemAmount(),e.pricePLS(),e.deadline(),e.deposited(),e.settled()]);
+  const lines=[
+   `seller:     ${s}`,
+   `buyer:      ${b}`,
+   `esteemAmount: ${toUnits(aE)}`,
+   `pricePLS:   ${toUnits(pPLS)}`,
+   `deadline:   ${new Date(Number(dl)*1000).toUTCString()}`,
+   `deposited:  ${dep}`,
+   `settled:    ${set}`
+  ];
+  $("onchain").textContent=lines.join("\n");
+  $("verifystatus").textContent="✅ On-chain details loaded.";
+  const am=me?me.toLowerCase():"";
+  const isSeller=am===s.toLowerCase();
+  const isBuyer=am===b.toLowerCase();
+  $("approveEsteem").disabled=!(isSeller&&!dep&&!set);
+  $("depositEsteem").disabled=!(isSeller&&!dep&&!set);
+  $("buy").disabled=!(isBuyer&&dep&&!set);
+  $("refund").disabled=!(isSeller&&dep&&!set&&(Math.floor(Date.now()/1000)>Number(dl)));
 
-    // Turn hint
-    let hint="";
-    if(!dep&&!set)hint="👤 Seller: approve + deposit ESTEEM.";
-    else if(dep&&!set)hint="👤 Buyer: verify & click Buy to send PLS.";
-    else if(set)hint="✅ Complete. Both sides settled.";
-    else if(Math.floor(Date.now()/1000)>Number(dl))hint="⏳ Deadline passed — Seller may refund.";
-    setTurn(hint);
-  }catch(e){$("verifystatus").textContent="❌ Verify error: "+(e?.message||e);}
+  let hint="";
+  if(!dep&&!set)hint="👤 Seller: approve + deposit ESTEEM.";
+  else if(dep&&!set)hint="👤 Buyer: verify & click Buy to send PLS.";
+  else if(set)hint="✅ Complete. Both sides settled.";
+  else if(Math.floor(Date.now()/1000)>Number(dl))hint="⏳ Deadline passed — Seller may refund.";
+  setTurn(hint);
+ }catch(e){$("verifystatus").textContent="❌ Verify error: "+(e?.message||e);}
 };
 
-/*** Approve ESTEEM ***/
 $("approveEsteem").onclick=async()=>{
-  try{
-    const esc=$("escrow").value.trim(); const e=new ethers.Contract(esc,escrowABI,signer);
-    const amt=await e.esteemAmount(); const token=new ethers.Contract(ESTEEM,erc20ABI,signer);
-    showWait(true); const tx=await token.approve(esc,amt); await tx.wait();
-    setStatus("✅ Approved ESTEEM."); $("approveEsteem").disabled=true;
-  }catch(e){alert("Approve error: "+(e?.reason||e?.message||e));}
-  finally{showWait(false);}
+ try{
+  const esc=$("escrow").value.trim();
+  const e=new ethers.Contract(esc,escrowABI,signer);
+  const amt=await e.esteemAmount();
+  const token=new ethers.Contract(ESTEEM,erc20ABI,signer);
+  showWait(true);
+  const tx=await token.approve(esc,amt);
+  await tx.wait();
+  setStatus("✅ Approved ESTEEM.");$("approveEsteem").disabled=true;
+  $("checkApprove").style.display="inline";
+ }catch(e){alert("Approve error: "+(e?.reason||e?.message||e));}
+ finally{showWait(false);}
 };
 
-/*** Deposit ESTEEM ***/
 $("depositEsteem").onclick=async()=>{
-  try{
-    const esc=$("escrow").value.trim(); const e=new ethers.Contract(esc,escrowABI,signer);
-    showWait(true); const tx=await e.depositEsteem(); await tx.wait();
-    setStatus("✅ Deposited ESTEEM."); $("depositEsteem").disabled=true;
-  }catch(e){alert("Deposit error: "+(e?.reason||e?.message||e));}
-  finally{showWait(false);}
+ try{
+  const esc=$("escrow").value.trim();
+  const e=new ethers.Contract(esc,escrowABI,signer);
+  showWait(true);
+  const tx=await e.depositEsteem();await tx.wait();
+  setStatus("✅ Deposited ESTEEM.");$("depositEsteem").disabled=true;
+  $("checkDeposit").style.display="inline";
+ }catch(e){alert("Deposit error: "+(e?.reason||e?.message||e));}
+ finally{showWait(false);}
 };
 
-/*** Buy (send PLS) ***/
 $("buy").onclick=async()=>{
-  try{
-    const esc=$("escrow").value.trim(); const e=new ethers.Contract(esc,escrowABI,signer);
-    const price=await e.pricePLS(); showWait(true);
-    const tx=await e.buy({value:price}); await tx.wait();
-    setStatus("✅ Purchased: PLS → Seller, ESTEEM → Buyer."); $("buy").disabled=true;
-  }catch(e){alert("Buy error: "+(e?.reason||e?.message||e));}
-  finally{showWait(false);}
+ try{
+  const esc=$("escrow").value.trim();
+  const e=new ethers.Contract(esc,escrowABI,signer);
+  const price=await e.pricePLS();
+  showWait(true);
+  const tx=await e.buy({value:price});
+  await tx.wait();
+  setStatus("✅ Purchased: PLS → Seller, ESTEEM → Buyer.");
+  $("buy").disabled=true;$("checkBuy").style.display="inline";
+ }catch(e){alert("Buy error: "+(e?.reason||e?.message||e));}
+ finally{showWait(false);}
 };
 
-/*** Refund ***/
 $("refund").onclick=async()=>{
-  try{
-    const esc=$("escrow").value.trim(); const e=new ethers.Contract(esc,escrowABI,signer);
-    showWait(true); const tx=await e.refund(); await tx.wait();
-    setStatus("✅ Refunded ESTEEM to Seller."); $("refund").disabled=true;
-  }catch(e){alert("Refund error: "+(e?.reason||e?.message||e));}
-  finally{showWait(false);}
+ try{
+  const esc=$("escrow").value.trim();
+  const e=new ethers.Contract(esc,escrowABI,signer);
+  showWait(true);
+  const tx=await e.refund();await tx.wait();
+  setStatus("✅ Refunded ESTEEM to Seller.");$("refund").disabled=true;
+  $("checkRefund").style.display="inline";
+ }catch(e){alert("Refund error: "+(e?.reason||e?.message||e));}
+ finally{showWait(false);}
 };
 
-/*** Autofill from ?escrow= ***/
-const params=new URLSearchParams(location.search);const esc=params.get("escrow");
-if(esc)$("escrow").value=esc;
+const params=new URLSearchParams(location.search);const esc=params.get("escrow");if(esc)$("escrow").value=esc;
 </script>
 </body>
 </html>
