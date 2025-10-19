@@ -1,394 +1,262 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pulsecrow – Trustless Two-Party Escrow on PulseChain (ERC-20 or PLS)</title>
-  <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.1/dist/ethers.umd.min.js"></script>
-  <style>
-    :root { --primary:#0084ff; --bg:#f8fafc; --text:#222; }
-    html { scroll-behavior: smooth; }
-    body { font-family:"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text);
-           max-width:720px; margin:40px auto; padding:24px; border-radius:16px; box-shadow:0 0 20px rgba(0,0,0,0.08);}
-    h1,h2{text-align:center;}
-    input,button{ width:100%; padding:10px; margin:6px 0; border-radius:8px; border:1px solid #ccc; font-size:15px;}
-    button{ background:var(--primary); color:#fff; font-weight:600; border:none; cursor:pointer;}
-    button:disabled{background:#ccc;cursor:not-allowed;}
-    button:hover:enabled{background:#006edc;}
-    #statusBox{ background:#fff; border:1px solid #ddd; border-radius:8px; padding:10px; margin-top:10px; white-space:pre-wrap;}
-    .small{font-size:0.9em;color:#555;}
-    .section{margin-top:30px;}
-    .logo-row{display:flex;justify-content:center;align-items:center;gap:16px;margin-bottom:10px;}
-    .crow{font-size:60px;line-height:1;}
-    .row-bracket{ border:1px dashed #bbb; border-radius:10px; padding:8px 10px; margin:6px 0; }
-    .options-row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
-    .option {
-      display:flex;
-      align-items:center;
-      gap:6px;
-      white-space:nowrap;        /* prevents “A” or “B” from wrapping to next line */
-    }
-
-    .option input[type="checkbox"]{ accent-color:var(--primary); transform:scale(1.2); cursor:pointer;}
-    #loadingOverlay{ position:fixed; inset:0; background:rgba(255,255,255,0.85); display:none;
-                     align-items:center; justify-content:center; flex-direction:column; font-size:1.2em; color:#333; z-index:999999;}
-    .spinner{ border:4px solid #ccc; border-top:4px solid var(--primary); border-radius:50%; width:42px; height:42px;
-              animation:spin 1s linear infinite; margin-bottom:12px;}
-    @keyframes spin {100% {transform:rotate(360deg);}}
-    #verifyBadge{ margin-top:6px; font-size:13px;}
-    #instructions{ background:#fff; border:1px solid #ddd; border-radius:10px; padding:16px; margin-top:40px; font-size:14px; line-height:1.55;}
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulsecrow – Trustless Two-Party Escrow on PulseChain</title>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.8.1/dist/ethers.umd.min.js"></script>
+<style>
+:root { --primary:#0084ff; --bg:#f8fafc; --text:#222; }
+html { scroll-behavior: smooth; }
+body {
+  font-family:"Segoe UI",Roboto,sans-serif;
+  background:var(--bg); color:var(--text);
+  max-width:640px; margin:40px auto; padding:24px;
+  border-radius:16px; box-shadow:0 0 20px rgba(0,0,0,0.08);
+}
+h1,h2{text-align:center;}
+input,button {
+  width:100%; padding:10px; margin:6px 0;
+  border-radius:8px; border:1px solid #ccc; font-size:15px;
+}
+button {
+  background:var(--primary); color:#fff; font-weight:600;
+  border:none; cursor:pointer;
+}
+button:disabled{background:#ccc;cursor:not-allowed;}
+button:hover:enabled{background:#006edc;}
+#statusBox {
+  background:#fff; border:1px solid #ddd; border-radius:8px;
+  padding:10px; margin-top:10px; white-space:pre-wrap;
+}
+.small{font-size:0.9em;color:#555;}
+.section{margin-top:30px;}
+.esteem-toggle {
+  display:flex; align-items:center; gap:6px;
+  margin:4px 0 10px 0; font-size:0.9em; width:fit-content;
+}
+.esteem-toggle input[type="checkbox"] {
+  accent-color: var(--primary);
+  transform: scale(1.2);
+  cursor:pointer;
+}
+.esteem-toggle label { cursor:pointer; }
+.logo-row {
+  display:flex; justify-content:center; align-items:center;
+  gap:16px; margin-bottom:10px;
+}
+.crow { font-size:60px; line-height:1; }
+#loadingOverlay {
+  position:fixed; top:0; left:0; right:0; bottom:0;
+  background:rgba(255,255,255,0.85);
+  display:none; align-items:center; justify-content:center;
+  flex-direction:column; font-size:1.2em; color:#333; z-index:999999;
+}
+.spinner {
+  border:4px solid #ccc;
+  border-top:4px solid var(--primary);
+  border-radius:50%;
+  width:42px; height:42px;
+  animation:spin 1s linear infinite;
+  margin-bottom:12px;
+}
+@keyframes spin {100% {transform:rotate(360deg);}}
+#verifyBadge { margin-top:6px; font-size:13px; text-align:center; }
+#instructions {
+  background:#fff; border:1px solid #ddd; border-radius:10px;
+  padding:16px; margin-top:40px; font-size:14px; line-height:1.55;
+}
+</style>
 </head>
+
 <body>
-  <div class="logo-row">
-    <span style="font-size:36px;">⚡</span><span class="crow">🐦‍⬛</span><span style="font-size:36px;">⚡</span>
-  </div>
-  <h1 style="margin-top:0;">Pulsecrow</h1>
-  <p style="text-align:center;">
-    Trustless two-deposit escrow on <b>PulseChain</b><br>
-    <a href="#instructions" style="font-size:14px;color:#0084ff;text-decoration:none;">📘 View Instructions</a>
-  </p>
-
-  <button id="connectBtn">🔗 Connect Wallet</button>
-  <div id="walletInfo" class="small"></div>
-
-  <hr/>
-
-  <!-- CREATE -->
-  <div class="section">
-    <h2>Create New Escrow</h2>
-    <input id="partyB" placeholder="Counterparty address (Party B)" />
-
-    <!-- TOKEN A -->
-    <input id="tokenA" placeholder="Your token (Token A) address (leave blank if using PLS)" />
-    <div class="row-bracket">
-      <div class="options-row">
-        <label class="option"><input type="checkbox" id="useEsteemA"><span>Use Esteem for token A</span></label>
-        <label class="option"><input type="checkbox" id="usePLSA"><span>Use PLS for token A</span></label>
-      </div>
-      <span class="small">Tip: leave both unchecked to enter any ERC-20.</span>
-    </div>
-    <input id="amountA" placeholder="Your amount (e.g. 1.5)" />
-    <input id="decA" placeholder="Token A decimals (e.g. 18)" />
-
-    <!-- TOKEN B -->
-    <input id="tokenB" placeholder="Their token (Token B) address (leave blank if using PLS)" />
-    <div class="row-bracket">
-      <div class="options-row">
-        <label class="option"><input type="checkbox" id="useEsteemB"><span>Use Esteem for token B</span></label>
-        <label class="option"><input type="checkbox" id="usePLSB"><span>Use PLS for token B</span></label>
-      </div>
-      <span class="small">Tip: leave both unchecked to enter any ERC-20.</span>
-    </div>
-    <input id="amountB" placeholder="Their amount (e.g. 100)" />
-    <input id="decB" placeholder="Token B decimals (e.g. 18)" />
-
-    <input id="deadline" placeholder="Deadline (minutes from now)" />
-    <button id="createBtn" disabled>Create Escrow</button>
-    <div id="newEscrow" class="small"></div>
-  </div>
-
-  <!-- JOIN -->
-  <div class="section">
-    <h2>Join Existing Escrow</h2>
-    <input id="escrowAddr" placeholder="Paste Escrow Address" />
-    <div id="verifyBadge"></div>
-    <button id="approveBtn" disabled>Approve My Token (ERC-20 only)</button>
-    <button id="depositBtn" disabled>Deposit My Side</button>
-    <button id="settleBtn" disabled>Settle</button>
-    <button id="refundBtn" disabled>Refund</button>
-    <div id="statusBox">Status: not connected</div>
-  </div>
-
-  <div id="log" class="small"></div>
-
-  <!-- overlay -->
-  <div id="loadingOverlay">
-    <div class="spinner"></div>
-    <div>⏳ Waiting for confirmation...</div>
-  </div>
-
-  <!-- INSTRUCTIONS -->
-  <div id="instructions">
-    <b>How to use Pulsecrow (ERC-20 or PLS per side):</b><br><br>
-    <b>1.</b> Connect wallet (e.g. OKX / MetaMask).<br>
-    <b>2.</b> Create or join an escrow.<br><br>
-    <u>Create:</u><br>
-    • Enter Party B address.<br>
-    • For each side, optionally tick <b>Use PLS</b> or <b>Use Esteem</b> (or neither for a custom ERC-20).<br>
-    • Fill amount + decimals (18 for PLS/Esteem).<br>
-    • Set <b>deadline</b> in minutes, then <b>Create Escrow</b>.<br>
-    • Share the generated link.<br><br>
-    <u>Join:</u><br>
-    • Paste address or open invite link.<br>
-    • Look for “✅ Verified Pulsecrow escrow”.<br>
-    • If your side is ERC-20 → <b>Approve</b>, then <b>Deposit</b>.<br>
-    • If your side is PLS → just <b>Deposit</b> (no approve).<br>
-    • When both sides have deposited, either party can <b>Settle</b>.<br>
-    • After the deadline (if not both deposited), each side can <b>Refund</b> themselves.<br>
-
-<hr style="margin:20px 0;">
-<p style="font-size:13px; text-align:center;">
-  🔍 View the factory contract:<br>
-  <a href="https://scan.pulsechain.com/address/0x8B74774e0a07bF3cD66c3e074C3942CB118A0762"
-     target="_blank" rel="noopener noreferrer"
-     style="color:#0084ff; word-break:break-all;">
-     0x8B74774e0a07bF3cD66c3e074C3942CB118A0762
-  </a>
+<div class="logo-row">
+  <span style="font-size:36px;">⚡</span>
+  <span class="crow">🐦‍⬛</span>
+  <span style="font-size:36px;">⚡</span>
+</div>
+<h1>Pulsecrow</h1>
+<p style="text-align:center;">
+  Simple two-deposit escrow on <b>PulseChain</b><br>
+  <a href="#instructions" style="font-size:14px;color:#0084ff;text-decoration:none;">📘 View Instructions</a>
 </p>
+
+<button id="connectBtn">🔗 Connect Wallet</button>
+<div id="walletInfo" class="small"></div>
+<p class="small" style="text-align:center;">
+  Pulsecrow runs entirely on-chain using verified contracts.<br>
+  Funds are never held by Pulsecrow — only by the blockchain escrow itself.
+</p>
+<hr/>
+
+<div class="section">
+  <h2>Create New Escrow</h2>
+  <input id="partyB" placeholder="Counterparty address (Party B)" />
+  <input id="tokenA" placeholder="Your token (Token A) address" />
+  <div class="esteem-toggle"><input type="checkbox" id="useEsteemA"><label for="useEsteemA">Use Esteem for Token A</label></div>
+  <div class="esteem-toggle"><input type="checkbox" id="usePLSA"><label for="usePLSA">Use PLS for Token A</label></div>
+  <input id="amountA" placeholder="Your amount (e.g. 1.5)" />
+  <input id="decA" placeholder="Token A decimals (e.g. 18)" />
+  <input id="tokenB" placeholder="Their token (Token B) address" />
+  <div class="esteem-toggle"><input type="checkbox" id="useEsteemB"><label for="useEsteemB">Use Esteem for Token B</label></div>
+  <div class="esteem-toggle"><input type="checkbox" id="usePLSB"><label for="usePLSB">Use PLS for Token B</label></div>
+  <input id="amountB" placeholder="Their amount (e.g. 100)" />
+  <input id="decB" placeholder="Token B decimals (e.g. 18)" />
+  <input id="deadline" placeholder="Deadline (minutes from now)" />
+  <button id="createBtn" disabled>Create Escrow</button>
+  <div id="newEscrow" class="small"></div>
 </div>
 
-  <script>
-    // === Config ===
-    // REPLACE with your deployed factory address after deploying PulsecrowFactoryNative:
-    const FACTORY = "0x8B74774e0a07bF3cD66c3e074C3942CB118A0762";
-    const ESTEEM_TOKEN = "0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5";
-    const ESTEEM_DECIMALS = 18;
-    const ZERO = "0x0000000000000000000000000000000000000000";
+<div class="section">
+  <h2>Join Existing Escrow</h2>
+  <input id="escrowAddr" placeholder="Paste Escrow Address" />
+  <div id="verifyBadge">Waiting for details...</div>
+  <button id="approveBtn" disabled>Approve My Token</button>
+  <button id="depositBtn" disabled>Deposit My Token</button>
+  <button id="settleBtn" disabled>Settle</button>
+  <button id="refundBtn" disabled>Refund</button>
+  <div id="statusBox">Status: not connected</div>
+</div>
 
-    const factoryABI = [
-      "function createEscrow(address,address,address,address,uint256,uint256,uint256) external returns (address)",
-      "event EscrowCreated(address indexed creator,address escrowAddress,address,address,address,address,uint256,uint256,uint256)"
-    ];
-    const escrowABI = [
-      "function depositA() external","function depositB() external",
-      "function depositNativeA() external payable","function depositNativeB() external payable",
-      "function settle() external",
-      "function refundA() external","function refundB() external",
-      "function partyA() view returns (address)","function partyB() view returns (address)",
-      "function tokenA() view returns (address)","function tokenB() view returns (address)",
-      "function amountA() view returns (uint256)","function amountB() view returns (uint256)",
-      "function depositedA() view returns (bool)","function depositedB() view returns (bool)"
-    ];
+<div id="loadingOverlay">
+  <div class="spinner"></div>
+  <div>⏳ Waiting for confirmation...</div>
+</div>
 
-    let provider, signer, userAddr;
+<div id="instructions">
+  <b>How to use Pulsecrow:</b><br><br>
+  1️⃣ Connect your wallet (e.g. OKX or MetaMask).<br>
+  2️⃣ Choose to create or join an escrow.<br>
+  3️⃣ Both users must input identical token info before deposits are enabled.<br>
+  4️⃣ Native PLS cannot be used directly — wrap to WPLS if needed.<br><br>
+  <p style="font-size:13px;text-align:center;">
+    🔍 Official verified Pulsecrow factory contract:<br>
+    <a href="https://scan.pulsechain.com/address/0x6a8359FB0204C5A5a52b7ecf3bbb76299DE16EfF" target="_blank" style="color:#0084ff;">0x6a8359FB0204C5A5a52b7ecf3bbb76299DE16EfF</a>
+  </p>
+</div>
 
-    function log(msg){ document.getElementById("log").innerText = msg; console.log(msg); }
-    function showLoading(show=true){ document.getElementById("loadingOverlay").style.display = show ? "flex" : "none"; }
+<script>
+const FACTORY="0x6a8359FB0204C5A5a52b7ecf3bbb76299DE16EfF";
+const ESTEEM_TOKEN="0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5";
+const ESTEEM_DECIMALS=18;
+const factoryABI=[
+ "function createEscrow(address,address,address,address,uint256,uint256,uint256) external returns (address)",
+ "event EscrowCreated(address indexed creator,address escrowAddress)"
+];
+const escrowABI=[
+ "function depositA() external","function depositB() external","function settle() external",
+ "function refundA() external","function refundB() external",
+ "function partyA() view returns(address)","function partyB() view returns(address)",
+ "function tokenA() view returns(address)","function tokenB() view returns(address)",
+ "function amountA() view returns(uint256)","function amountB() view returns(uint256)",
+ "function depositedA() view returns(bool)","function depositedB() view returns(bool)"
+];
+let provider,signer,userAddr;
 
-    function toUnits(amountStr, decimals){
-      const n = parseFloat(amountStr);
-      if (!Number.isFinite(n)) throw new Error("Invalid amount");
-      return BigInt(Math.round(n * 10 ** decimals));
-    }
+function showLoading(b){document.getElementById("loadingOverlay").style.display=b?"flex":"none";}
+function toWei(a,d){return BigInt(Math.round(parseFloat(a)*10**d));}
 
-    async function connect(){
-      try{
-        if(!window.ethereum) return alert("Please install OKX Wallet or MetaMask.");
-        provider = new ethers.BrowserProvider(window.ethereum);
-        await provider.send("eth_requestAccounts",[]);
-        signer = await provider.getSigner();
-        userAddr = await signer.getAddress();
-        document.getElementById("walletInfo").innerText = `Connected: ${userAddr}`;
-        ["createBtn","approveBtn","depositBtn","settleBtn","refundBtn"].forEach(id=>document.getElementById(id).disabled=false);
-        document.getElementById("statusBox").innerText = "Wallet connected.";
-      }catch(e){ alert("Connection failed: " + e.message); }
-    }
+async function connect(){
+ try{
+   if(!window.ethereum)return alert("Please install MetaMask or OKX Wallet.");
+   provider=new ethers.BrowserProvider(window.ethereum);
+   await provider.send("eth_requestAccounts",[]);
+   signer=await provider.getSigner(); userAddr=await signer.getAddress();
+   document.getElementById("walletInfo").innerText=`Connected: ${userAddr}`;
+   ["createBtn","settleBtn","refundBtn"].forEach(id=>document.getElementById(id).disabled=false);
+   document.getElementById("statusBox").innerText="Wallet connected.";
+ }catch(e){alert("Connection failed: "+e.message);}
+}
 
-    // UI toggles for Esteem / PLS
-    const tA = ()=>document.getElementById("tokenA");
-    const tB = ()=>document.getElementById("tokenB");
-    const dA = ()=>document.getElementById("decA");
-    const dB = ()=>document.getElementById("decB");
-    const cbEsteemA = ()=>document.getElementById("useEsteemA");
-    const cbEsteemB = ()=>document.getElementById("useEsteemB");
-    const cbPLSA = ()=>document.getElementById("usePLSA");
-    const cbPLSB = ()=>document.getElementById("usePLSB");
+async function createEscrow(){
+ try{
+  showLoading(true);
+  const f=new ethers.Contract(FACTORY,factoryABI,signer);
+  const amtA=toWei(document.getElementById("amountA").value,parseInt(document.getElementById("decA").value));
+  const amtB=toWei(document.getElementById("amountB").value,parseInt(document.getElementById("decB").value));
+  const minutes=parseInt(document.getElementById("deadline").value);
+  const deadlineUnix=Math.floor(Date.now()/1000)+(minutes*60);
+  const tx=await f.createEscrow(userAddr,document.getElementById("partyB").value,document.getElementById("tokenA").value,document.getElementById("tokenB").value,amtA,amtB,deadlineUnix);
+  const rcpt=await tx.wait();
+  const evt=rcpt.logs?.find(l=>l.fragment?.name==="EscrowCreated");
+  const addr=evt?evt.args.escrowAddress:"(unknown)";
+  const shareLink=`${window.location.origin}${window.location.pathname}?escrow=${addr}`;
+  document.getElementById("newEscrow").innerHTML=`✅ Escrow created at:<br><code>${addr}</code><br>Share:<br><a href="${shareLink}" target="_blank">${shareLink}</a>`;
+  document.getElementById("escrowAddr").value=addr;
+ }catch(e){console.log(e);alert(e.message);}finally{showLoading(false);}
+}
 
-    function wireToggles(){
-      // A: Esteem vs PLS
-      cbEsteemA().addEventListener("change",()=>{
-        if (cbEsteemA().checked) { cbPLSA().checked = false; tA().value = ESTEEM_TOKEN; dA().value = ESTEEM_DECIMALS; tA().disabled = dA().disabled = true; }
-        else { if (!cbPLSA().checked){ tA().value = ""; dA().value = ""; tA().disabled = dA().disabled = false; } }
-      });
-      cbPLSA().addEventListener("change",()=>{
-        if (cbPLSA().checked) { cbEsteemA().checked = false; tA().value = "(native PLS)"; dA().value = 18; tA().disabled = dA().disabled = true; }
-        else { if (!cbEsteemA().checked){ tA().value = ""; dA().value = ""; tA().disabled = dA().disabled = false; } }
-      });
+function getEscrow(){
+ const addr=document.getElementById("escrowAddr").value.trim();
+ if(!ethers.isAddress(addr))throw new Error("Invalid address");
+ return new ethers.Contract(addr,escrowABI,signer);
+}
 
-      // B: Esteem vs PLS
-      cbEsteemB().addEventListener("change",()=>{
-        if (cbEsteemB().checked) { cbPLSB().checked = false; tB().value = ESTEEM_TOKEN; dB().value = ESTEEM_DECIMALS; tB().disabled = dB().disabled = true; }
-        else { if (!cbPLSB().checked){ tB().value = ""; dB().value = ""; tB().disabled = dB().disabled = false; } }
-      });
-      cbPLSB().addEventListener("change",()=>{
-        if (cbPLSB().checked) { cbEsteemB().checked = false; tB().value = "(native PLS)"; dB().value = 18; tB().disabled = dB().disabled = true; }
-        else { if (!cbEsteemB().checked){ tB().value = ""; dB().value = ""; tB().disabled = dB().disabled = false; } }
-      });
-    }
+async function approve(){
+ try{
+  showLoading(true);
+  const e=getEscrow(); const [a,b]=await Promise.all([e.partyA(),e.partyB()]);
+  const isA=userAddr.toLowerCase()===a.toLowerCase();
+  const tokenAddr=isA?await e.tokenA():await e.tokenB();
+  const amt=isA?await e.amountA():await e.amountB();
+  const token=new ethers.Contract(tokenAddr,["function approve(address,uint256)public returns(bool)"],signer);
+  const tx=await token.approve(document.getElementById("escrowAddr").value,amt);
+  await tx.wait(); alert("✅ Approved!");
+ }catch(e){alert("Approval error: "+e.message);}finally{showLoading(false);}
+}
 
-    function resolveTokenAddr(usePLS, useEsteem, manualAddr){
-      if (usePLS)   return ZERO;               // native
-      if (useEsteem) return ESTEEM_TOKEN;      // esteem
-      if (!manualAddr || manualAddr.trim()==="") throw new Error("Token address required (or choose PLS/Esteem)");
-      if (!ethers.isAddress(manualAddr)) throw new Error("Invalid token address");
-      return manualAddr;
-    }
+async function deposit(){
+ try{
+  showLoading(true);
+  const e=getEscrow(); const [a,b]=await Promise.all([e.partyA(),e.partyB()]);
+  const isA=userAddr.toLowerCase()===a.toLowerCase();
+  const tx=await(isA?e.depositA():e.depositB());
+  await tx.wait(); alert("✅ Deposit complete.");
+ }catch(e){alert("Deposit error: "+e.message);}finally{showLoading(false);}
+}
 
-    async function createEscrow(){
-      try{
-        showLoading(true);
-        const factory = new ethers.Contract(FACTORY, factoryABI, signer);
+// --- Escrow match verifier for User B ---
+async function verifyEscrowMatch(){
+ const escrowAddr=document.getElementById("escrowAddr").value.trim();
+ if(!ethers.isAddress(escrowAddr))return;
+ try{
+  const e=new ethers.Contract(escrowAddr,escrowABI,provider);
+  const [tA,tB,aA,aB]=await Promise.all([e.tokenA(),e.tokenB(),e.amountA(),e.amountB()]);
+  const iA=document.getElementById("tokenA").value.trim().toLowerCase();
+  const iB=document.getElementById("tokenB").value.trim().toLowerCase();
+  const decA=parseInt(document.getElementById("decA").value||18);
+  const decB=parseInt(document.getElementById("decB").value||18);
+  const amtA=parseFloat(document.getElementById("amountA").value||0);
+  const amtB=parseFloat(document.getElementById("amountB").value||0);
+  const pA=BigInt(Math.round(amtA*10**decA));
+  const pB=BigInt(Math.round(amtB*10**decB));
+  const match=(iA===tA.toLowerCase()&&iB===tB.toLowerCase()&&pA===aA&&pB===aB);
+  const ab=document.getElementById("approveBtn"), db=document.getElementById("depositBtn");
+  if(match){ab.disabled=false;db.disabled=false;document.getElementById("verifyBadge").innerText="✅ Escrow details match.";}
+  else{ab.disabled=true;db.disabled=true;document.getElementById("verifyBadge").innerText="❌ Escrow details don’t match.";}
+ }catch(err){document.getElementById("verifyBadge").innerText="⚠️ Cannot read escrow";}
+}
+["tokenA","tokenB","amountA","amountB","decA","decB","escrowAddr"].forEach(id=>{
+ const el=document.getElementById(id);
+ if(el)el.addEventListener("input",verifyEscrowMatch);
+});
 
-        const usePLS_A = cbPLSA().checked, usePLS_B = cbPLSB().checked;
-        const useEST_A = cbEsteemA().checked, useEST_B = cbEsteemB().checked;
+function setupToggles(){
+ const cbA=document.getElementById("useEsteemA"), cbB=document.getElementById("useEsteemB"),
+       cbPA=document.getElementById("usePLSA"), cbPB=document.getElementById("usePLSB"),
+       tA=document.getElementById("tokenA"), tB=document.getElementById("tokenB"),
+       dA=document.getElementById("decA"), dB=document.getElementById("decB");
+ cbA.onchange=()=>{if(cbA.checked){cbPA.checked=false;tA.value=ESTEEM_TOKEN;dA.value=ESTEEM_DECIMALS;tA.disabled=dA.disabled=true;}else{tA.disabled=dA.disabled=false;tA.value="";dA.value="";}};
+ cbB.onchange=()=>{if(cbB.checked){cbPB.checked=false;tB.value=ESTEEM_TOKEN;dB.value=ESTEEM_DECIMALS;tB.disabled=dB.disabled=true;}else{tB.disabled=dB.disabled=false;tB.value="";dB.value="";}};
+ cbPA.onchange=()=>{if(cbPA.checked){cbA.checked=false;tA.value="PLS";dA.value=18;tA.disabled=dA.disabled=true;}else{tA.disabled=dA.disabled=false;tA.value="";dA.value="";}};
+ cbPB.onchange=()=>{if(cbPB.checked){cbB.checked=false;tB.value="PLS";dB.value=18;tB.disabled=dB.disabled=true;}else{tB.disabled=dB.disabled=false;tB.value="";dB.value="";}};
+}
+setupToggles();
 
-        const tokenAAddr = resolveTokenAddr(usePLS_A, useEST_A, tA().value.trim());
-        const tokenBAddr = resolveTokenAddr(usePLS_B, useEST_B, tB().value.trim());
-
-        const decAVal = parseInt(dA().value); const decBVal = parseInt(dB().value);
-        const amtA = toUnits(document.getElementById("amountA").value, decAVal);
-        const amtB = toUnits(document.getElementById("amountB").value, decBVal);
-
-        const minutes = parseInt(document.getElementById("deadline").value);
-        const deadlineUnix = Math.floor(Date.now()/1000) + (minutes*60);
-
-        const tx = await factory.createEscrow(
-          userAddr,
-          document.getElementById("partyB").value,
-          tokenAAddr,
-          tokenBAddr,
-          amtA, amtB, deadlineUnix
-        );
-        const rcpt = await tx.wait();
-        const evt = rcpt.logs?.find(l=>l.fragment?.name==="EscrowCreated");
-        const addr = evt ? evt.args.escrowAddress : "(unknown)";
-        const shareLink = `${window.location.origin}${window.location.pathname}?escrow=${addr}`;
-
-        document.getElementById("newEscrow").innerHTML =
-          `✅ Escrow created at:<br><code>${addr}</code><br><br>Share link:<br><a href="${shareLink}" target="_blank">${shareLink}</a>`;
-        document.getElementById("escrowAddr").value = addr;
-      } catch(e) {
-        log("Error: " + e.message);
-      } finally {
-        showLoading(false);
-      }
-    }
-
-    function getEscrow(){
-      const addr = document.getElementById("escrowAddr").value.trim();
-      if (!ethers.isAddress(addr)) throw new Error("Invalid escrow address");
-      return new ethers.Contract(addr, escrowABI, signer);
-    }
-
-    async function approve(){
-      try{
-        showLoading(true);
-        const e = getEscrow();
-        const [a,b,ta,tb,aa,ab] = await Promise.all([ e.partyA(), e.partyB(), e.tokenA(), e.tokenB(), e.amountA(), e.amountB() ]);
-        const isA = userAddr.toLowerCase() === a.toLowerCase();
-        const myToken = isA ? ta : tb;
-        const myAmt   = isA ? aa : ab;
-
-        if (myToken === ZERO) {
-          log("Native PLS side: approval not needed.");
-          return;
-        }
-        const token = new ethers.Contract(myToken, ["function approve(address,uint256) public returns (bool)"], signer);
-        const tx = await token.approve(document.getElementById("escrowAddr").value, myAmt);
-        await tx.wait();
-        log("✅ Approved");
-      }catch(e){ log("Approval error: " + e.message); }
-      finally{ showLoading(false); }
-    }
-
-    async function deposit(){
-      try{
-        showLoading(true);
-        const e = getEscrow();
-        const [a,b,ta,tb,aa,ab] = await Promise.all([ e.partyA(), e.partyB(), e.tokenA(), e.tokenB(), e.amountA(), e.amountB() ]);
-        const isA = userAddr.toLowerCase() === a.toLowerCase();
-        let tx;
-        if (isA) {
-          if (ta === ZERO) tx = await e.depositNativeA({ value: aa });
-          else             tx = await e.depositA();
-        } else {
-          if (tb === ZERO) tx = await e.depositNativeB({ value: ab });
-          else             tx = await e.depositB();
-        }
-        await tx.wait();
-        log("✅ Deposit complete.");
-        readStatus();
-      }catch(e){ log("Deposit error: " + e.message); }
-      finally{ showLoading(false); }
-    }
-
-    async function settle(){
-      try{ showLoading(true); const tx = await getEscrow().settle(); await tx.wait(); log("✅ Settled."); }
-      catch(e){ log("Settle error: " + e.message); }
-      finally{ showLoading(false); }
-    }
-
-    async function refund(){
-      try{
-        showLoading(true);
-        const e = getEscrow();
-        const [a,b] = await Promise.all([e.partyA(), e.partyB()]);
-        const isA = userAddr.toLowerCase() === a.toLowerCase();
-        const tx = await (isA ? e.refundA() : e.refundB());
-        await tx.wait();
-        log("✅ Refunded.");
-      }catch(e){ log("Refund error: " + e.message); }
-      finally{ showLoading(false); }
-    }
-
-    async function readStatus(){
-      try{
-        const e = getEscrow();
-        const [a,b,da,db,ta,tb,aa,ab] = await Promise.all([
-          e.partyA(), e.partyB(), e.depositedA(), e.depositedB(), e.tokenA(), e.tokenB(), e.amountA(), e.amountB()
-        ]);
-        const decA = (ta === ZERO) ? 18 : await tryDecimals(ta);
-        const decB = (tb === ZERO) ? 18 : await tryDecimals(tb);
-        const symA = (ta === ZERO) ? "PLS" : await trySymbol(ta);
-        const symB = (tb === ZERO) ? "PLS" : await trySymbol(tb);
-        const amtA = parseFloat(ethers.formatUnits(aa, decA)).toFixed(6);
-        const amtB = parseFloat(ethers.formatUnits(ab, decB)).toFixed(6);
-        document.getElementById("statusBox").innerText =
-          `Escrow\nA: ${a}\nB: ${b}\nDeposited A (${amtA} ${symA}): ${da}\nDeposited B (${amtB} ${symB}): ${db}`;
-      }catch(e){ document.getElementById("statusBox").innerText = "Status error: " + e.message; }
-    }
-
-    async function trySymbol(addr){ try{ const t = new ethers.Contract(addr,["function symbol() view returns (string)"],provider); return await t.symbol(); } catch { return "TOKEN"; } }
-    async function tryDecimals(addr){ try{ const t = new ethers.Contract(addr,["function decimals() view returns (uint8)"],provider); return await t.decimals(); } catch { return 18; } }
-
-    async function verifyEscrowOrigin(addr){
-      try{ const code = await provider.getCode(addr);
-        if(code !== "0x"){ document.getElementById("verifyBadge").innerText = "✅ Verified Pulsecrow escrow (official factory)"; }
-        else{ document.getElementById("verifyBadge").innerText = "⚠️ No contract at this address"; }
-      }catch{ document.getElementById("verifyBadge").innerText = "⚠️ Unable to verify escrow"; }
-    }
-
-    // Auto-fill from ?escrow=
-    (function(){
-      const p = new URLSearchParams(window.location.search);
-      const esc = p.get("escrow");
-      if (esc) {
-        document.addEventListener("DOMContentLoaded", ()=>{
-          document.getElementById("escrowAddr").value = esc;
-          if (window.ethereum) { // ensure provider exists before verify
-            provider = new ethers.BrowserProvider(window.ethereum);
-            verifyEscrowOrigin(esc);
-          }
-        });
-      }
-    })();
-
-    // wire buttons
-    document.getElementById("connectBtn").onclick = connect;
-    document.getElementById("createBtn").onclick  = createEscrow;
-    document.getElementById("approveBtn").onclick = approve;
-    document.getElementById("depositBtn").onclick = deposit;
-    document.getElementById("settleBtn").onclick  = settle;
-    document.getElementById("refundBtn").onclick  = refund;
-
-    // set up toggles
-    wireToggles();
-  </script>
+document.getElementById("connectBtn").onclick=connect;
+document.getElementById("createBtn").onclick=createEscrow;
+document.getElementById("approveBtn").onclick=approve;
+document.getElementById("depositBtn").onclick=deposit;
+</script>
 </body>
 </html>
-
-
-
-
-
