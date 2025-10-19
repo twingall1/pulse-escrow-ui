@@ -89,11 +89,11 @@ target="_blank" style="color:#0084ff;">0xDf370c23b14E694117C930a46656e0750b08c30
 <script>
 const FACTORY="0xDf370c23b14E694117C930a46656e0750b08c301";
 const TOKENS={
-  "PLS":   {addr:"0x7049dB2dEa5C2314E7354a6B9C44CdbC73367F1B",dec:18},
-  "WPLS":  {addr:"0xA10D38c309B7B86A0e0F34218C5a620b6245Ff96",dec:18},
-  "PLSX":  {addr:"0xF6B2D434B4C65A2C26B2D60C7F7B2B3E57629193",dec:18},
-  "WETH":  {addr:"0xA722C13135930332Eb3d749B2F0906559D2C5b99",dec:18},
-  "ESTEEM":{addr:"0x9FdCE721C528E6DBc4F494F3E80b9B28A3059Ab5",dec:18}
+ "PLS":   {addr:"0x7049dB2dEa5C2314E7354a6B9C44CdbC73367F1B",dec:18},
+ "WPLS":  {addr:"0xA10D38c309B7B86A0e0F34218C5a620b6245Ff96",dec:18},
+ "PLSX":  {addr:"0xF6B2D434B4C65A2C26B2D60C7F7B2B3E57629193",dec:18},
+ "WETH":  {addr:"0xA722C13135930332Eb3d749B2F0906559D2C5b99",dec:18},
+ "ESTEEM":{addr:"0x9FdCE721C528E6DBc4F494F3E80b9B28A3059Ab5",dec:18}
 };
 const whitelist=Object.values(TOKENS).map(t=>t.addr.toLowerCase());
 
@@ -129,48 +129,53 @@ async function createEscrow(){
  try{
   showLoad(true);
   const f=new ethers.Contract(FACTORY,factoryABI,signer);
-  const aA=toWei(tokenA_amt.value,parseInt(decA.value));
-  const aB=toWei(tokenB_amt.value,parseInt(decB.value));
-  const mins=parseInt(deadline.value);
+  const amtA=toWei(document.getElementById("amountA").value,parseInt(document.getElementById("decA").value));
+  const amtB=toWei(document.getElementById("amountB").value,parseInt(document.getElementById("decB").value));
+  const mins=parseInt(document.getElementById("deadline").value);
   const dUnix=Math.floor(Date.now()/1000)+(mins*60);
-  const tx=await f.createEscrow(userAddr,partyB.value,tokenA.value,tokenB.value,aA,aB,dUnix);
+  const tx=await f.createEscrow(userAddr,document.getElementById("partyB").value,
+   document.getElementById("tokenA").value,document.getElementById("tokenB").value,amtA,amtB,dUnix);
   const rcpt=await tx.wait();const evt=rcpt.logs?.find(l=>l.fragment?.name==="EscrowCreated");
   const addr=evt?evt.args.escrowAddress:"(unknown)";
   const link=`${location.origin}${location.pathname}?escrow=${addr}`;
-  newEscrow.innerHTML=`✅ Escrow created:<br><code>${addr}</code><br><a href="${link}" target="_blank">${link}</a>`;
-  escrowAddr.value=addr;
+  document.getElementById("newEscrow").innerHTML=`✅ Escrow created:<br><code>${addr}</code><br><a href="${link}" target="_blank">${link}</a>`;
+  document.getElementById("escrowAddr").value=addr;
  }catch(e){alert("Error: "+e.message);}finally{showLoad(false);}
 }
 
 // ---- Verify User B Inputs ----
 async function verifyUserBInputs(){
  try{
-  const esc=escrowAddr.value.trim();if(!ethers.isAddress(esc))return alert("Bad address");
+  const esc=document.getElementById("escrowAddr").value.trim();
+  if(!ethers.isAddress(esc))return alert("Invalid escrow address.");
   const e=new ethers.Contract(esc,escrowABI,provider);
   const [onA,onB,onAmtA,onAmtB]=await Promise.all([e.tokenA(),e.tokenB(),e.amountA(),e.amountB()]);
-  const inA=tokenA.value.trim(),inB=tokenB.value.trim();
-  const inAmtA=toWei(amountA.value,parseInt(decA.value));
-  const inAmtB=toWei(amountB.value,parseInt(decB.value));
+  const inA=document.getElementById("tokenA").value.trim();
+  const inB=document.getElementById("tokenB").value.trim();
+  const inAmtA=toWei(document.getElementById("amountA").value,parseInt(document.getElementById("decA").value));
+  const inAmtB=toWei(document.getElementById("amountB").value,parseInt(document.getElementById("decB").value));
   const match=inA.toLowerCase()===onA.toLowerCase()&&inB.toLowerCase()===onB.toLowerCase()&&inAmtA===onAmtA&&inAmtB===onAmtB;
-  const buttons=["approveBtn","depositBtn","settleBtn","refundBtn"].map(id=>document.getElementById(id));
-  if(match){buttons.forEach(b=>b.disabled=false);statusBox.innerText="✅ Verified: Inputs match escrow.";}
-  else{buttons.forEach(b=>b.disabled=true);statusBox.innerText="⚠️ Mismatch — escrow details differ.";}
+  const btns=["approveBtn","depositBtn","settleBtn","refundBtn"].map(id=>document.getElementById(id));
+  if(match){btns.forEach(b=>b.disabled=false);statusBox.innerText="✅ Verified: Inputs match escrow.";}
+  else{btns.forEach(b=>b.disabled=true);statusBox.innerText="⚠️ Mismatch — escrow details differ.";}
  }catch(e){statusBox.innerText="Verification error: "+e.message;}
 }
 
-// ---- Approve/Deposit/Settle/Refund ----
-const getEsc=()=>new ethers.Contract(escrowAddr.value,escrowABI,signer);
+// ---- Approve / Deposit / Settle / Refund ----
+const getEsc=()=>new ethers.Contract(document.getElementById("escrowAddr").value,escrowABI,signer);
 async function approve(){try{showLoad(true);const e=getEsc();const a=await e.partyA(),b=await e.partyB();
-const isA=userAddr.toLowerCase()===a.toLowerCase();const tokenAddr=isA?await e.tokenA():await e.tokenB();
-const amt=isA?await e.amountA():await e.amountB();const t=new ethers.Contract(tokenAddr,["function approve(address,uint256) public returns(bool)"],signer);
-await (await t.approve(escrowAddr.value,amt)).wait();alert("Approved!");}catch(e){alert(e.message);}finally{showLoad(false);}}
+const isA=userAddr.toLowerCase()===a.toLowerCase();const tAddr=isA?await e.tokenA():await e.tokenB();
+const amt=isA?await e.amountA():await e.amountB();
+const t=new ethers.Contract(tAddr,["function approve(address,uint256) public returns(bool)"],signer);
+await (await t.approve(document.getElementById("escrowAddr").value,amt)).wait();alert("Approved!");}
+catch(e){alert(e.message);}finally{showLoad(false);}}
 async function deposit(){try{showLoad(true);const e=getEsc();const a=await e.partyA();const isA=userAddr.toLowerCase()===a.toLowerCase();
 await (await (isA?e.depositA():e.depositB())).wait();alert("Deposit complete!");}catch(e){alert(e.message);}finally{showLoad(false);}}
 async function settle(){try{showLoad(true);await (await getEsc().settle()).wait();alert("Settled!");}catch(e){alert(e.message);}finally{showLoad(false);}}
 async function refund(){try{showLoad(true);const e=getEsc();const a=await e.partyA();const isA=userAddr.toLowerCase()===a.toLowerCase();
 await (await (isA?e.refundA():e.refundB())).wait();alert("Refunded.");}catch(e){alert(e.message);}finally{showLoad(false);}}
 
-// ---- Token toggle & whitelist check ----
+// ---- Token toggles & whitelist ----
 function setupTokenRows(){
  for(const side of["A","B"]){
   const row=document.getElementById("row"+side);
@@ -178,17 +183,19 @@ function setupTokenRows(){
    const box=document.createElement("div");box.className="toggle";
    const cb=document.createElement("input");cb.type="checkbox";cb.id=`${sym}${side}`;
    const lb=document.createElement("label");lb.htmlFor=cb.id;lb.innerText=sym;
-   cb.addEventListener("change",()=>{for(const el of row.querySelectorAll("input"))if(el!==cb)el.checked=false;
-    if(cb.checked){document.getElementById("token"+side).value=t.addr;
-    document.getElementById("dec"+side).value=t.dec;document.getElementById("token"+side).disabled=document.getElementById("dec"+side).disabled=true;}
-    else{document.getElementById("token"+side).disabled=document.getElementById("dec"+side).disabled=false;
-    document.getElementById("token"+side).value="";document.getElementById("dec"+side).value="";}});
+   cb.addEventListener("change",()=>{
+     for(const el of row.querySelectorAll("input"))if(el!==cb)el.checked=false;
+     const tok=document.getElementById("token"+side),dec=document.getElementById("dec"+side);
+     if(cb.checked){tok.value=t.addr;dec.value=t.dec;tok.disabled=dec.disabled=true;}
+     else{tok.disabled=dec.disabled=false;tok.value="";dec.value="";}
+   });
    box.append(cb,lb);row.append(box);
   }
  }
  ["tokenA","tokenB"].forEach(id=>{
   document.getElementById(id).addEventListener("input",e=>{
-    const v=e.target.value.trim().toLowerCase();const warn=document.getElementById(id==="tokenA"?"warnA":"warnB");
+    const v=e.target.value.trim().toLowerCase();
+    const warn=document.getElementById(id==="tokenA"?"warnA":"warnB");
     if(v&&v.startsWith("0x")&&!whitelist.includes(v))warn.innerText="⚠️ Not a whitelisted token.";
     else warn.innerText="";
   });
@@ -196,8 +203,13 @@ function setupTokenRows(){
 }
 
 // ---- Event wiring ----
-connectBtn.onclick=connect;createBtn.onclick=createEscrow;verifyBtn.onclick=verifyUserBInputs;
-approveBtn.onclick=approve;depositBtn.onclick=deposit;settleBtn.onclick=settle;refundBtn.onclick=refund;
+document.getElementById("connectBtn").onclick=connect;
+document.getElementById("createBtn").onclick=createEscrow;
+document.getElementById("verifyBtn").onclick=verifyUserBInputs;
+document.getElementById("approveBtn").onclick=approve;
+document.getElementById("depositBtn").onclick=deposit;
+document.getElementById("settleBtn").onclick=settle;
+document.getElementById("refundBtn").onclick=refund;
 setupTokenRows();
 </script>
 </body>
