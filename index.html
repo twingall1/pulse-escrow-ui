@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Pulsecrow – One-Sided Escrow (ESTEEM → PLS)</title>
+<title>Pulsecrow – One-Sided Escrow (ESTEEM ⇄ PLS)</title>
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.1/dist/ethers.umd.min.js"></script>
 <style>
   body{font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:760px;margin:32px auto;padding:18px;background:#f8fafc;color:#111}
@@ -16,11 +16,15 @@
   #overlay{position:fixed;inset:0;background:rgba(255,255,255,0.82);display:none;align-items:center;justify-content:center;flex-direction:column;z-index:99999}
   .spinner{border:4px solid #ddd;border-top:4px solid #2563eb;border-radius:50%;width:42px;height:42px;animation:spin 1s linear infinite;margin-bottom:12px}
   @keyframes spin{100%{transform:rotate(360deg)}}
+  #instructions{background:#fff;border:1px solid #ddd;border-radius:10px;padding:16px;font-size:14px;margin-top:16px;line-height:1.55}
 </style>
 </head>
 <body>
 <h1>Pulsecrow</h1>
-<p class="muted">One-sided escrow: Seller escrows <b>ESTEEM</b>, Buyer pays <b>PLS</b> in one click.</p>
+<p class="muted">
+  One-sided escrow: Seller deposits <b>ESTEEM</b>; Buyer pays <b>PLS</b> in one click.
+  <br><a href="#instructions" style="color:#2563eb;text-decoration:none;">📘 View brief instructions</a>
+</p>
 
 <div class="card">
   <button id="connect">🔗 Connect Wallet</button>
@@ -31,7 +35,7 @@
   <h2>Create Escrow</h2>
   <div class="row">
     <input id="seller" placeholder="Seller address (will deposit ESTEEM)">
-    <input id="buyer" placeholder="Buyer address (only this address can buy)">
+    <input id="buyer" placeholder="Buyer address (will pay PLS)">
   </div>
   <div class="row">
     <input id="esteemAmt" placeholder="ESTEEM amount (e.g. 15)">
@@ -61,15 +65,27 @@
 <div class="card">
   <h2>Status</h2>
   <div id="status" class="mono"></div>
+  <div id="turn" style="font-style:italic;color:#444;margin-top:6px;"></div>
 </div>
 
 <div id="overlay"><div class="spinner"></div><div>⏳ Waiting for confirmation…</div></div>
 
+<div id="instructions">
+  <b>Quick guide:</b><br><br>
+  1️⃣ <b>Seller</b> connects wallet and creates the escrow (enter buyer address, ESTEEM amount, price in PLS, and deadline).<br>
+  2️⃣ Share the link or escrow address with the <b>Buyer</b>.<br>
+  3️⃣ <b>Both</b> click “Load On-Chain Details” and check the printed numbers match what was agreed.<br>
+  4️⃣ <b>Seller</b> clicks “Approve ESTEEM”, then “Deposit ESTEEM”.<br>
+  5️⃣ Once deposited, <b>Buyer</b> clicks “Buy (send PLS)” to complete the swap.<br>
+  6️⃣ If the Buyer never buys and the deadline passes, <b>Seller</b> clicks “Refund”.<br><br>
+  Always verify the on-chain values before acting. Pulsecrow never holds funds — only the escrow contract does.
+</div>
+
 <script>
 /*** CONFIG ***/
 const READONLY_RPC = "https://rpc.pulsechain.com";
-const FACTORY = "0xd4f4606BA258156b0aB8C70F0678Ded67AF8577e"; // TODO: replace after deploy
-const ESTEEM = "0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5"; // lowercase to dodge ethers v6 EIP-1191 quirks
+const FACTORY = "0x0000000000000000000000000000000000000000"; // replace after deploy
+const ESTEEM = "0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5";
 const DEC = 18;
 
 /*** ABIs ***/
@@ -90,208 +106,138 @@ const escrowABI = [
   "function refund() external"
 ];
 const erc20ABI = [
-  "function allowance(address owner,address spender) view returns(uint256)",
   "function approve(address spender,uint256 amount) returns(bool)"
 ];
 
-/*** State ***/
-let providerRO = new ethers.JsonRpcProvider(READONLY_RPC);
-let provider, signer, me;
-
 /*** Helpers ***/
-const $ = id => document.getElementById(id);
-const toWei = v => ethers.parseUnits(String(v), DEC);
-const toUnits = bn => Number(ethers.formatUnits(bn, DEC));
-const showWait = b => $("overlay").style.display = b ? "flex" : "none";
-const setStatus = m => $("status").textContent = m;
+const $ = id=>document.getElementById(id);
+const toWei=v=>ethers.parseUnits(String(v),DEC);
+const toUnits=bn=>Number(ethers.formatUnits(bn,DEC));
+const showWait=b=>$("overlay").style.display=b?"flex":"none";
+const setStatus=m=>$("status").textContent=m;
+const setTurn=m=>$("turn").textContent=m;
+
+/*** State ***/
+let providerRO=new ethers.JsonRpcProvider(READONLY_RPC);
+let provider,signer,me;
 
 /*** Connect ***/
-$("connect").onclick = async () => {
-  if (!window.ethereum) return alert("Install MetaMask or OKX");
-  provider = new ethers.BrowserProvider(window.ethereum);
-  await provider.send("eth_requestAccounts", []);
-  signer = await provider.getSigner();
-  me = await signer.getAddress();
-  $("who").textContent = `Connected: ${me}`;
-  $("create").disabled = true;
-
-  // convenience: prefill seller with your address
-  $("seller").value = me;
-  $("create").disabled = false;
+$("connect").onclick=async()=>{
+  if(!window.ethereum)return alert("Install MetaMask or OKX Wallet");
+  provider=new ethers.BrowserProvider(window.ethereum);
+  await provider.send("eth_requestAccounts",[]);
+  signer=await provider.getSigner();
+  me=await signer.getAddress();
+  $("who").textContent=`Connected: ${me}`;
+  $("seller").value=me;
+  $("create").disabled=false;
 };
 
 /*** Create ***/
-$("create").onclick = async () => {
-  try {
-    if (!signer) return alert("Connect wallet first");
-    if (FACTORY === "0x0000000000000000000000000000000000000000") return alert("Set FACTORY address in index.html");
-
-    const seller = $("seller").value.trim();
-    const buyer  = $("buyer").value.trim();
-    if (!ethers.isAddress(seller) || !ethers.isAddress(buyer)) return alert("Enter valid seller & buyer addresses");
-
-    const esteemAmt = parseFloat($("esteemAmt").value);
-    const pricePLS  = parseFloat($("pricePLS").value);
-    if (!(esteemAmt>0 && pricePLS>0)) return alert("Enter positive amounts");
-
-    const mins = parseInt($("deadlineMins").value) || 30;
-    const deadline = Math.floor(Date.now()/1000) + mins*60;
-
-    const f = new ethers.Contract(FACTORY, factoryABI, signer);
-
-    // Predict (static call) + Create
-    const predicted = await f.createEscrow.staticCall(seller, buyer, toWei(esteemAmt), toWei(pricePLS), deadline);
-    console.log("Predicted:", predicted);
-
+$("create").onclick=async()=>{
+  try{
+    if(!signer)return alert("Connect wallet");
+    const f=new ethers.Contract(FACTORY,factoryABI,signer);
+    const seller=$("seller").value.trim(),buyer=$("buyer").value.trim();
+    if(!ethers.isAddress(seller)||!ethers.isAddress(buyer))return alert("Bad addresses");
+    const esteemAmt=parseFloat($("esteemAmt").value),price=parseFloat($("pricePLS").value);
+    if(!(esteemAmt>0&&price>0))return alert("Amounts invalid");
+    const mins=parseInt($("deadlineMins").value)||30;
+    const dl=Math.floor(Date.now()/1000)+mins*60;
+    const predicted=await f.createEscrow.staticCall(seller,buyer,toWei(esteemAmt),toWei(price),dl);
     showWait(true);
-    const tx = await f.createEscrow(seller, buyer, toWei(esteemAmt), toWei(pricePLS), deadline);
-    console.log("Create tx:", tx.hash);
-    const rc = await tx.wait();
-
-    // Parse event, fallback to predicted
+    const tx=await f.createEscrow(seller,buyer,toWei(esteemAmt),toWei(price),dl);
+    const rc=await tx.wait();
     let esc;
-    try {
-      const parsed = rc.logs.map(l => f.interface.parseLog(l)).find(p => p?.name === "EscrowCreated");
-      esc = parsed?.args?.escrow;
-    } catch { esc = predicted; }
-
-    const link = `${location.origin}${location.pathname}?escrow=${esc}`;
-    $("created").innerHTML = `✅ Escrow: <code>${esc}</code><br>Share: <a href="${link}" target="_blank">${link}</a>`;
-    $("escrow").value = esc;
-    setStatus("Escrow created. Seller should approve & deposit ESTEEM. Buyer can then buy with PLS.");
-  } catch (e) {
-    console.error(e);
-    alert("Create error: " + (e?.reason || e?.message || e));
-  } finally {
-    showWait(false);
-  }
+    try{esc=rc.logs.map(l=>f.interface.parseLog(l)).find(p=>p?.name==="EscrowCreated")?.args?.escrow;}catch{esc=predicted;}
+    const link=`${location.origin}${location.pathname}?escrow=${esc}`;
+    $("created").innerHTML=`✅ Escrow created: <code>${esc}</code><br>Share this link:<br><a href="${link}" target="_blank">${link}</a>`;
+    $("escrow").value=esc;
+    setStatus("Escrow ready. Seller approves + deposits ESTEEM, then Buyer buys with PLS.");
+  }catch(e){alert("Create error: "+(e?.reason||e?.message||e));}
+  finally{showWait(false);}
 };
 
 /*** Load / Verify ***/
-$("load").onclick = async () => {
-  try {
-    const esc = $("escrow").value.trim();
-    if (!ethers.isAddress(esc)) return alert("Enter a valid escrow address");
-    const e = new ethers.Contract(esc, escrowABI, provider || providerRO);
-
-    const [s, b, aE, pPLS, dl, dep, set] = await Promise.all([
-      e.seller(), e.buyer(), e.esteemAmount(), e.pricePLS(), e.deadline(), e.deposited(), e.settled()
-    ]);
-
-    const lines = [
+$("load").onclick=async()=>{
+  try{
+    const esc=$("escrow").value.trim(); if(!ethers.isAddress(esc))return alert("Invalid address");
+    const e=new ethers.Contract(esc,escrowABI,provider||providerRO);
+    const [s,b,aE,pPLS,dl,dep,set]=await Promise.all([e.seller(),e.buyer(),e.esteemAmount(),e.pricePLS(),e.deadline(),e.deposited(),e.settled()]);
+    const lines=[
       `seller:       ${s}`,
       `buyer:        ${b}`,
-      `esteemAmount: ${toUnits(aE)} (raw ${aE})`,
-      `pricePLS:     ${toUnits(pPLS)} (raw ${pPLS})`,
-      `deadline:     ${new Date(Number(dl)*1000).toUTCString()} (unix ${dl})`,
+      `esteemAmount: ${toUnits(aE)}`,
+      `pricePLS:     ${toUnits(pPLS)}`,
+      `deadline:     ${new Date(Number(dl)*1000).toUTCString()}`,
       `deposited:    ${dep}`,
       `settled:      ${set}`
     ];
-    $("onchain").textContent = lines.join("\n");
-    $("verifystatus").textContent = "✅ Loaded on-chain details.";
+    $("onchain").textContent=lines.join("\n");
+    $("verifystatus").textContent="✅ On-chain details loaded.";
+    const am=me?me.toLowerCase():"";
+    const isSeller=am===s.toLowerCase();
+    const isBuyer=am===b.toLowerCase();
+    $("approveEsteem").disabled=!(isSeller&&!dep&&!set);
+    $("depositEsteem").disabled=!(isSeller&&!dep&&!set);
+    $("buy").disabled=!(isBuyer&&dep&&!set);
+    $("refund").disabled=!(isSeller&&dep&&!set&&(Math.floor(Date.now()/1000)>Number(dl)));
 
-    // Gate buttons based on who you are + state
-    const am = me ? me.toLowerCase() : "";
-    const isSeller = am === s.toLowerCase();
-    const isBuyer  = am === b.toLowerCase();
-
-    $("approveEsteem").disabled  = !(isSeller && !dep && !set);
-    $("depositEsteem").disabled  = !(isSeller && !dep && !set);
-    $("buy").disabled            = !(isBuyer && dep && !set);
-    $("refund").disabled         = !(isSeller && dep && !set && (Math.floor(Date.now()/1000) > Number(dl)));
-  } catch (e) {
-    console.error(e);
-    $("verifystatus").textContent = "❌ Verify error: " + (e?.message || e);
-  }
+    // Turn hint
+    let hint="";
+    if(!dep&&!set)hint="👤 Seller: approve + deposit ESTEEM.";
+    else if(dep&&!set)hint="👤 Buyer: verify & click Buy to send PLS.";
+    else if(set)hint="✅ Complete. Both sides settled.";
+    else if(Math.floor(Date.now()/1000)>Number(dl))hint="⏳ Deadline passed — Seller may refund.";
+    setTurn(hint);
+  }catch(e){$("verifystatus").textContent="❌ Verify error: "+(e?.message||e);}
 };
 
-/*** Seller: Approve ESTEEM ***/
-$("approveEsteem").onclick = async () => {
-  try {
-    if (!signer) return alert("Connect wallet first");
-    const esc = $("escrow").value.trim();
-    const e = new ethers.Contract(esc, escrowABI, signer);
-    const amount = await e.esteemAmount();
-    const token = new ethers.Contract(ESTEEM, erc20ABI, signer);
-
-    showWait(true);
-    const tx = await token.approve(esc, amount);
-    console.log("Approve ESTEEM tx:", tx.hash);
-    await tx.wait();
-    setStatus("✅ Approved ESTEEM.");
-  } catch (e) {
-    console.error(e);
-    alert("Approve error: " + (e?.reason || e?.message || e));
-  } finally {
-    showWait(false);
-  }
+/*** Approve ESTEEM ***/
+$("approveEsteem").onclick=async()=>{
+  try{
+    const esc=$("escrow").value.trim(); const e=new ethers.Contract(esc,escrowABI,signer);
+    const amt=await e.esteemAmount(); const token=new ethers.Contract(ESTEEM,erc20ABI,signer);
+    showWait(true); const tx=await token.approve(esc,amt); await tx.wait();
+    setStatus("✅ Approved ESTEEM."); $("approveEsteem").disabled=true;
+  }catch(e){alert("Approve error: "+(e?.reason||e?.message||e));}
+  finally{showWait(false);}
 };
 
-/*** Seller: Deposit ESTEEM ***/
-$("depositEsteem").onclick = async () => {
-  try {
-    if (!signer) return alert("Connect wallet first");
-    const esc = $("escrow").value.trim();
-    const e = new ethers.Contract(esc, escrowABI, signer);
-
-    showWait(true);
-    const tx = await e.depositEsteem();
-    console.log("Deposit ESTEEM tx:", tx.hash);
-    await tx.wait();
-    setStatus("✅ ESTEEM deposited.");
-  } catch (e) {
-    console.error(e);
-    alert("Deposit error: " + (e?.reason || e?.message || e));
-  } finally {
-    showWait(false);
-  }
+/*** Deposit ESTEEM ***/
+$("depositEsteem").onclick=async()=>{
+  try{
+    const esc=$("escrow").value.trim(); const e=new ethers.Contract(esc,escrowABI,signer);
+    showWait(true); const tx=await e.depositEsteem(); await tx.wait();
+    setStatus("✅ Deposited ESTEEM."); $("depositEsteem").disabled=true;
+  }catch(e){alert("Deposit error: "+(e?.reason||e?.message||e));}
+  finally{showWait(false);}
 };
 
-/*** Buyer: Buy (send PLS) ***/
-$("buy").onclick = async () => {
-  try {
-    if (!signer) return alert("Connect wallet first");
-    const esc = $("escrow").value.trim();
-    const e = new ethers.Contract(esc, escrowABI, signer);
-    const price = await e.pricePLS();
-
-    showWait(true);
-    const tx = await e.buy({ value: price });
-    console.log("Buy tx:", tx.hash);
-    await tx.wait();
-    setStatus("✅ Purchased: PLS → Seller, ESTEEM → Buyer.");
-  } catch (e) {
-    console.error(e);
-    alert("Buy error: " + (e?.reason || e?.message || e));
-  } finally {
-    showWait(false);
-  }
+/*** Buy (send PLS) ***/
+$("buy").onclick=async()=>{
+  try{
+    const esc=$("escrow").value.trim(); const e=new ethers.Contract(esc,escrowABI,signer);
+    const price=await e.pricePLS(); showWait(true);
+    const tx=await e.buy({value:price}); await tx.wait();
+    setStatus("✅ Purchased: PLS → Seller, ESTEEM → Buyer."); $("buy").disabled=true;
+  }catch(e){alert("Buy error: "+(e?.reason||e?.message||e));}
+  finally{showWait(false);}
 };
 
-/*** Seller: Refund (after deadline) ***/
-$("refund").onclick = async () => {
-  try {
-    if (!signer) return alert("Connect wallet first");
-    const esc = $("escrow").value.trim();
-    const e = new ethers.Contract(esc, escrowABI, signer);
-
-    showWait(true);
-    const tx = await e.refund();
-    console.log("Refund tx:", tx.hash);
-    await tx.wait();
-    setStatus("✅ Refunded ESTEEM to Seller.");
-  } catch (e) {
-    console.error(e);
-    alert("Refund error: " + (e?.reason || e?.message || e));
-  } finally {
-    showWait(false);
-  }
+/*** Refund ***/
+$("refund").onclick=async()=>{
+  try{
+    const esc=$("escrow").value.trim(); const e=new ethers.Contract(esc,escrowABI,signer);
+    showWait(true); const tx=await e.refund(); await tx.wait();
+    setStatus("✅ Refunded ESTEEM to Seller."); $("refund").disabled=true;
+  }catch(e){alert("Refund error: "+(e?.reason||e?.message||e));}
+  finally{showWait(false);}
 };
 
 /*** Autofill from ?escrow= ***/
-const params = new URLSearchParams(location.search);
-const esc = params.get("escrow");
-if (esc) $("escrow").value = esc;
+const params=new URLSearchParams(location.search);const esc=params.get("escrow");
+if(esc)$("escrow").value=esc;
 </script>
 </body>
 </html>
