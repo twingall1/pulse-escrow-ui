@@ -22,14 +22,13 @@
 </head>
 <body>
 <h1>Pulsecrow</h1>
-<p class="muted">ESTEEM ↔ WPLS two-deposit escrow • PulseChain • Works with MetaMask/OKX</p>
+<p class="muted">ESTEEM ↔ WPLS two-deposit escrow • PulseChain • Works with MetaMask / OKX</p>
 
 <div class="card">
   <button id="connect">🔗 Connect Wallet</button>
   <div id="who" class="muted"></div>
 </div>
 
-<!-- CREATE -->
 <div class="card">
   <h2>Create Escrow</h2>
   <div class="row">
@@ -41,20 +40,20 @@
     <div>
       <b>Who will deposit ESTEEM?</b>
       <div class="tokenradios">
-        <label class="radio"><input type="radio" name="esteemProvider" value="me">You (current wallet)</label>
+        <label class="radio"><input type="radio" name="esteemProvider" value="me">You</label>
         <label class="radio"><input type="radio" name="esteemProvider" value="them">Counterparty</label>
       </div>
       <input id="esteemAmount" placeholder="ESTEEM amount (e.g. 15)">
-      <p class="muted">Token: ESTEEM (0x9FdCE721C528E6DBc4F494F3E80b9B28A3059Ab5) • 18 decimals</p>
+      <p class="muted">Token address 0x9FdCE721C528E6DBc4F494F3E80b9B28A3059Ab5 • 18 decimals</p>
     </div>
     <div>
       <b>Who will deposit WPLS?</b>
       <div class="tokenradios">
-        <label class="radio"><input type="radio" name="wplsProvider" value="me">You (current wallet)</label>
+        <label class="radio"><input type="radio" name="wplsProvider" value="me">You</label>
         <label class="radio"><input type="radio" name="wplsProvider" value="them">Counterparty</label>
       </div>
       <input id="wplsAmount" placeholder="WPLS amount (e.g. 2000)">
-      <p class="muted">Token: WPLS (0xA10D38c309B7B86A0e0F34218C5a620B6245Ff96) • 18 decimals</p>
+      <p class="muted">Token address 0xA10D38c309B7B86A0e0F34218C5a620B6245Ff96 • 18 decimals</p>
     </div>
   </div>
 
@@ -62,19 +61,16 @@
   <div id="created" class="muted"></div>
 </div>
 
-<!-- VERIFY / JOIN -->
 <div class="card">
   <h2>Verify / Join Escrow</h2>
-  <input id="escrowAddr" placeholder="Escrow contract address (or open from shared link)">
+  <input id="escrowAddr" placeholder="Escrow contract address (from link)">
   <button id="load">🔍 Load On-Chain Details</button>
   <div id="verifystatus" class="muted"></div>
   <pre id="onchain" class="mono"></pre>
-
   <label style="display:flex;align-items:center;gap:8px;margin-top:8px;">
     <input type="checkbox" id="confirmMatch" disabled>
     <span>I confirm the on-chain details match our agreed terms.</span>
   </label>
-
   <div class="row" style="margin-top:8px;">
     <button id="approve" disabled>Approve My Token</button>
     <button id="deposit" disabled>Deposit My Token</button>
@@ -93,280 +89,196 @@
 <div id="overlay"><div class="spinner"></div><div>⏳ Waiting for confirmation…</div></div>
 
 <script>
-/*** CONFIG ***/
-const READONLY_RPC = "https://rpc.pulsechain.com";
-// 👉 Replace this with your deployed factory:
-const FACTORY = "0x0000000000000000000000000000000000000000"; // <-- fill after deployment
+const READONLY_RPC="https://rpc.pulsechain.com";
+const FACTORY="0xYOUR_FACTORY_ADDRESS_HERE"; // 🟦 replace after deployment
+const ESTEEM="0x9FdCE721C528E6DBc4F494F3E80b9B28A3059Ab5";
+const WPLS="0xA10D38c309B7B86A0e0F34218C5a620B6245Ff96";
+const DEC=18;
 
-const ESTEEM = "0x9FdCE721C528E6DBc4F494F3E80b9B28A3059Ab5";
-const WPLS   = "0xA10D38c309B7B86A0e0F34218C5a620B6245Ff96";
-const DEC = 18;
-
-/*** ABIs ***/
-const factoryABI = [
-  "function createEscrow(address providerEsteem,address providerWpls,uint256 esteemAmount,uint256 wplsAmount,uint256 deadline) external returns(address)",
-  "event EscrowCreated(address indexed creator,address escrow,address providerEsteem,address providerWpls,uint256 esteemAmount,uint256 wplsAmount,uint256 deadline)"
+const factoryABI=[
+ "function createEscrow(address,address,uint256,uint256,uint256) external returns(address)",
+ "function createEscrow(address providerEsteem,address providerWpls,uint256 esteemAmount,uint256 wplsAmount,uint256 deadline) external returns(address)",
+ "function EscrowCreated(address indexed creator,address escrow,address providerEsteem,address providerWpls,uint256 esteemAmount,uint256 wplsAmount,uint256 deadline) view",
+ "event EscrowCreated(address indexed creator,address escrow,address providerEsteem,address providerWpls,uint256 esteemAmount,uint256 wplsAmount,uint256 deadline)"
 ];
-
-const escrowABI = [
-  "function providerEsteem() view returns(address)",
-  "function providerWpls() view returns(address)",
-  "function esteemAmount() view returns(uint256)",
-  "function wplsAmount() view returns(uint256)",
-  "function depositedEsteem() view returns(bool)",
-  "function depositedWpls() view returns(bool)",
-  "function deadline() view returns(uint256)",
-  "function depositEsteem() external",
-  "function depositWpls() external",
-  "function settle() external",
-  "function refundEsteem() external",
-  "function refundWpls() external"
+const escrowABI=[
+ "function providerEsteem() view returns(address)",
+ "function providerWpls() view returns(address)",
+ "function esteemAmount() view returns(uint256)",
+ "function wplsAmount() view returns(uint256)",
+ "function depositedEsteem() view returns(bool)",
+ "function depositedWpls() view returns(bool)",
+ "function deadline() view returns(uint256)",
+ "function depositEsteem() external",
+ "function depositWpls() external",
+ "function settle() external",
+ "function refundEsteem() external",
+ "function refundWpls() external"
 ];
-
-const erc20ABI = [
-  "function allowance(address owner,address spender) view returns(uint256)",
-  "function approve(address spender,uint256 amount) returns(bool)"
+const erc20ABI=[
+ "function allowance(address owner,address spender) view returns(uint256)",
+ "function approve(address spender,uint256 amount) returns(bool)"
 ];
+let providerRO=new ethers.JsonRpcProvider(READONLY_RPC);
+let provider,signer,me;
+const $=id=>document.getElementById(id);
+const toWei=v=>ethers.parseUnits(String(v),DEC);
+const toUnits=b=>Number(ethers.formatUnits(b,DEC));
+const showWait=b=>$("overlay").style.display=b?"flex":"none";
+const setStatus=msg=>$("status").textContent=msg;
 
-/*** State ***/
-let providerRO = new ethers.JsonRpcProvider(READONLY_RPC);
-let provider, signer, me;
-
-/*** Helpers ***/
-const $ = (id) => document.getElementById(id);
-const toWei = (v) => ethers.parseUnits(String(v), DEC);
-const toUnits = (bn) => Number(ethers.formatUnits(bn, DEC));
-const ZERO = "0x0000000000000000000000000000000000000000";
-const showWait = (b)=> $("overlay").style.display = b ? "flex" : "none";
-const setStatus = (msg)=> $("status").textContent = msg;
-
-/*** Connect ***/
-$("connect").onclick = async () => {
-  if (!window.ethereum) return alert("Install MetaMask or OKX");
-  provider = new ethers.BrowserProvider(window.ethereum);
-  await provider.send("eth_requestAccounts",[]);
-  signer = await provider.getSigner();
-  me = await signer.getAddress();
-  $("who").textContent = `Connected: ${me}`;
-  $("create").disabled = false;
+/* ---------- Connect ---------- */
+$("connect").onclick=async()=>{
+ if(!window.ethereum)return alert("Install MetaMask or OKX");
+ provider=new ethers.BrowserProvider(window.ethereum);
+ await provider.send("eth_requestAccounts",[]);
+ signer=await provider.getSigner();
+ me=await signer.getAddress();
+ $("who").textContent=`Connected: ${me}`;
+ $("create").disabled=false;
 };
 
-/*** Build providers from radio selection ***/
-function resolveProviders(counterparty) {
-  const esteemSel = document.querySelector('input[name="esteemProvider"]:checked')?.value;
-  const wplsSel   = document.querySelector('input[name="wplsProvider"]:checked')?.value;
-  if (!esteemSel || !wplsSel) throw new Error("Select who provides ESTEEM and who provides WPLS");
-
-  const providerEsteem = (esteemSel === "me") ? me : counterparty;
-  const providerWpls   = (wplsSel   === "me") ? me : counterparty;
-  if (providerEsteem.toLowerCase() === providerWpls.toLowerCase()) {
-    throw new Error("The same wallet cannot be both providers. Choose different roles.");
-  }
-  return { providerEsteem, providerWpls };
+/* ---------- Resolve providers ---------- */
+function resolveProviders(counterparty){
+ const eSel=document.querySelector('input[name="esteemProvider"]:checked')?.value;
+ const wSel=document.querySelector('input[name="wplsProvider"]:checked')?.value;
+ if(!eSel||!wSel)throw new Error("Select who deposits ESTEEM and WPLS");
+ const providerEsteem=(eSel==="me")?me:counterparty;
+ const providerWpls=(wSel==="me")?me:counterparty;
+ if(providerEsteem.toLowerCase()===providerWpls.toLowerCase())
+  throw new Error("Same wallet for both providers not allowed");
+ return{providerEsteem,providerWpls};
 }
 
-/*** CREATE ***/
-$("create").onclick = async () => {
-  try {
-    if (!signer) return alert("Connect wallet first");
-    if (FACTORY === "0x02bc02Ab0527550983Dc9A6E0c206090Eb347e15") return alert("Set FACTORY address in index.html");
+/* ---------- CREATE ---------- */
+$("create").onclick=async()=>{
+ try{
+  if(!signer)return alert("Connect wallet first");
+  const counterparty=$("counterparty").value.trim();
+  if(!ethers.isAddress(counterparty))return alert("Enter valid counterparty address");
+  const esteemAmt=parseFloat($("esteemAmount").value);
+  const wplsAmt=parseFloat($("wplsAmount").value);
+  if(!(esteemAmt>0&&wplsAmt>0))return alert("Enter positive amounts");
+  const mins=parseInt($("deadlineMins").value)||30;
+  const deadline=Math.floor(Date.now()/1000)+mins*60;
+  const{providerEsteem,providerWpls}=resolveProviders(counterparty);
+  const f=new ethers.Contract(FACTORY,factoryABI,signer);
 
-    const counterparty = $("counterparty").value.trim();
-    if (!ethers.isAddress(counterparty)) return alert("Enter valid counterparty address");
-    const esteemAmt = parseFloat($("esteemAmount").value);
-    const wplsAmt   = parseFloat($("wplsAmount").value);
-    if (!Number.isFinite(esteemAmt) || !Number.isFinite(wplsAmt) || esteemAmt<=0 || wplsAmt<=0) {
-      return alert("Enter positive amounts for both tokens");
-    }
-    const mins = parseInt($("deadlineMins").value)||30;
-    const deadline = Math.floor(Date.now()/1000) + mins*60;
+  /* Predict escrow address before broadcast */
+  const predicted=await f.createEscrow.staticCall(
+    providerEsteem,providerWpls,toWei(esteemAmt),toWei(wplsAmt),deadline);
+  console.log("Predicted escrow address:",predicted);
 
-    const { providerEsteem, providerWpls } = resolveProviders(counterparty);
+  showWait(true);
+  const tx=await f.createEscrow(providerEsteem,providerWpls,toWei(esteemAmt),toWei(wplsAmt),deadline);
+  console.log("Create tx:",tx.hash);
+  const rc=await tx.wait();
 
-    const f = new ethers.Contract(FACTORY, factoryABI, signer);
-    showWait(true);
-    const tx = await f.createEscrow(
-      providerEsteem,
-      providerWpls,
-      toWei(esteemAmt),
-      toWei(wplsAmt),
-      deadline
-    );
-    console.log("Create tx:", tx.hash);
-    const rc = await tx.wait();
-    const ev = rc.logs?.find(l => l.fragment?.name === "EscrowCreated");
-    const esc = ev ? ev.args.escrow : "(unknown)";
-    const link = `${location.origin}${location.pathname}?escrow=${esc}`;
-    $("created").innerHTML = `✅ Created: <code>${esc}</code><br>Share: <a href="${link}" target="_blank">${link}</a>`;
-    $("escrowAddr").value = esc;
-    setStatus("Escrow created. Share the link with your counterparty.");
-  } catch (e) {
-    console.error(e);
-    alert("Create error: " + (e?.reason || e?.message || e));
-  } finally {
-    showWait(false);
+  /* Robust log parsing */
+  let esc;
+  try{
+    const parsed=rc.logs.map(l=>f.interface.parseLog(l)).find(p=>p?.name==="EscrowCreated");
+    esc=parsed?.args?.escrow;
+  }catch{esc=null;}
+  if(!esc){
+    const addr=rc.logs.map(l=>l.address).find(a=>a!==FACTORY);
+    esc=addr||predicted||"(unknown)";
   }
+
+  if(esc&&esc!=="(unknown)"){
+    const link=`${location.origin}${location.pathname}?escrow=${esc}`;
+    $("created").innerHTML=`✅ Escrow created at: <code>${esc}</code><br>🔗 Share this link with your counterparty:<br><a href="${link}" target="_blank">${link}</a>`;
+    $("escrowAddr").value=esc;
+    setStatus("Escrow created successfully.");
+  }else{
+    $("created").innerHTML="⚠️ Escrow created but address unreadable. Check PulseScan.";
+  }
+ }catch(e){
+  console.error(e);
+  alert("Create error: "+(e.reason||e.message||e));
+ }finally{showWait(false);}
 };
 
-/*** VERIFY ***/
-$("load").onclick = async () => {
-  try {
-    const esc = $("escrowAddr").value.trim();
-    if (!ethers.isAddress(esc)) return alert("Enter a valid escrow address");
-
-    const e = new ethers.Contract(esc, escrowABI, provider || providerRO);
-    // read all core fields (no ABI mismatch now, it’s our own contract)
-    const [pE, pW, aE, aW, dE, dW, dl] = await Promise.all([
-      e.providerEsteem(), e.providerWpls(), e.esteemAmount(), e.wplsAmount(),
-      e.depositedEsteem(), e.depositedWpls(), e.deadline()
-    ]);
-
-    const summary = [
-      `providerEsteem: ${pE}`,
-      `providerWpls:   ${pW}`,
-      `esteemAmount:   ${toUnits(aE)} (raw ${aE})`,
-      `wplsAmount:     ${toUnits(aW)} (raw ${aW})`,
-      `depositedEsteem:${dE}`,
-      `depositedWpls:  ${dW}`,
-      `deadline:       ${new Date(Number(dl)*1000).toUTCString()} (unix ${dl})`
-    ].join("\n");
-
-    $("onchain").textContent = summary;
-    $("verifystatus").textContent = "✅ Loaded on-chain details. Confirm they match your agreement.";
-    $("confirmMatch").disabled = false;
-
-    // Gate the actions until user checks the box
-    $("confirmMatch").onchange = () => {
-      const ok = $("confirmMatch").checked;
-      ["approve","deposit","settle","refund"].forEach(id => $(id).disabled = !ok);
-    };
-  } catch (e) {
-    console.error(e);
-    $("verifystatus").textContent = "❌ Verify error: " + (e?.message || e);
-  }
+/* ---------- VERIFY / JOIN ---------- */
+$("load").onclick=async()=>{
+ try{
+  const esc=$("escrowAddr").value.trim();
+  if(!ethers.isAddress(esc))return alert("Enter valid escrow address");
+  const e=new ethers.Contract(esc,escrowABI,provider||providerRO);
+  const[pE,pW,aE,aW,dE,dW,dl]=await Promise.all([
+    e.providerEsteem(),e.providerWpls(),e.esteemAmount(),e.wplsAmount(),
+    e.depositedEsteem(),e.depositedWpls(),e.deadline()
+  ]);
+  const summary=[
+   `providerEsteem: ${pE}`,
+   `providerWpls:   ${pW}`,
+   `esteemAmount:   ${toUnits(aE)} (raw ${aE})`,
+   `wplsAmount:    ${toUnits(aW)} (raw ${aW})`,
+   `depositedEsteem:${dE}`,
+   `depositedWpls:  ${dW}`,
+   `deadline: ${new Date(Number(dl)*1000).toUTCString()} (unix ${dl})`
+  ].join("\n");
+  $("onchain").textContent=summary;
+  $("verifystatus").textContent="✅ Loaded on-chain details.";
+  $("confirmMatch").disabled=false;
+  $("confirmMatch").onchange=()=>{const ok=$("confirmMatch").checked;
+    ["approve","deposit","settle","refund"].forEach(id=>$(id).disabled=!ok);}
+ }catch(e){
+  console.error(e);
+  $("verifystatus").textContent="❌ Verify error: "+(e.message||e);
+ }
 };
 
-/*** APPROVE (role-aware) ***/
-$("approve").onclick = async () => {
-  try {
-    if (!signer) return alert("Connect wallet first");
-    const esc = $("escrowAddr").value.trim();
-    const e = new ethers.Contract(esc, escrowABI, signer);
-
-    const [pE, pW, aE, aW] = await Promise.all([
-      e.providerEsteem(), e.providerWpls(), e.esteemAmount(), e.wplsAmount()
-    ]);
-    const addr = (await signer.getAddress()).toLowerCase();
-
-    if (addr === pE.toLowerCase()) {
-      // approve ESTEEM
-      const t = new ethers.Contract(ESTEEM, erc20ABI, signer);
-      showWait(true);
-      const tx = await t.approve(esc, aE);
-      console.log("Approve ESTEEM tx:", tx.hash);
-      await tx.wait();
-      setStatus("✅ Approved ESTEEM.");
-    } else if (addr === pW.toLowerCase()) {
-      // approve WPLS
-      const t = new ethers.Contract(WPLS, erc20ABI, signer);
-      showWait(true);
-      const tx = await t.approve(esc, aW);
-      console.log("Approve WPLS tx:", tx.hash);
-      await tx.wait();
-      setStatus("✅ Approved WPLS.");
-    } else {
-      alert("This wallet is not a provider for this escrow.");
-    }
-  } catch (e) {
-    console.error(e);
-    alert("Approval error: " + (e?.reason || e?.message || e));
-  } finally {
-    showWait(false);
-  }
+/* ---------- APPROVE / DEPOSIT / SETTLE / REFUND ---------- */
+const erc=(addr)=>new ethers.Contract(addr,erc20ABI,signer);
+$("approve").onclick=async()=>{
+ try{
+  const e=new ethers.Contract($("escrowAddr").value.trim(),escrowABI,signer);
+  const[pE,pW,aE,aW]=await Promise.all([e.providerEsteem(),e.providerWpls(),e.esteemAmount(),e.wplsAmount()]);
+  const addr=(await signer.getAddress()).toLowerCase();
+  showWait(true);
+  if(addr===pE.toLowerCase()){
+    const tx=await erc(ESTEEM).approve(e.target,aE);await tx.wait();setStatus("✅ Approved ESTEEM.");
+  }else if(addr===pW.toLowerCase()){
+    const tx=await erc(WPLS).approve(e.target,aW);await tx.wait();setStatus("✅ Approved WPLS.");
+  }else alert("This wallet is not a provider.");
+ }catch(e){alert("Approval error: "+(e.reason||e.message||e));}
+ finally{showWait(false);}
 };
 
-/*** DEPOSIT (role-aware, ERC-20 only) ***/
-$("deposit").onclick = async () => {
-  try {
-    if (!signer) return alert("Connect wallet first");
-    const esc = $("escrowAddr").value.trim();
-    const e = new ethers.Contract(esc, escrowABI, signer);
-
-    const [pE, pW] = await Promise.all([e.providerEsteem(), e.providerWpls()]);
-    const addr = (await signer.getAddress()).toLowerCase();
-
-    showWait(true);
-    let tx;
-    if (addr === pE.toLowerCase()) {
-      tx = await e.depositEsteem();
-      console.log("Deposit ESTEEM tx:", tx.hash);
-    } else if (addr === pW.toLowerCase()) {
-      tx = await e.depositWpls();
-      console.log("Deposit WPLS tx:", tx.hash);
-    } else {
-      return alert("This wallet is not a provider for this escrow.");
-    }
-    await tx.wait();
-    setStatus("✅ Deposit complete.");
-  } catch (e) {
-    console.error(e);
-    alert("Deposit error: " + (e?.reason || e?.message || e));
-  } finally {
-    showWait(false);
-  }
+$("deposit").onclick=async()=>{
+ try{
+  const e=new ethers.Contract($("escrowAddr").value.trim(),escrowABI,signer);
+  const[pE,pW]=await Promise.all([e.providerEsteem(),e.providerWpls()]);
+  const addr=(await signer.getAddress()).toLowerCase();
+  showWait(true);
+  let tx;
+  if(addr===pE.toLowerCase()){tx=await e.depositEsteem();}
+  else if(addr===pW.toLowerCase()){tx=await e.depositWpls();}
+  else return alert("This wallet is not a provider.");
+  await tx.wait();setStatus("✅ Deposit complete.");
+ }catch(e){alert("Deposit error: "+(e.reason||e.message||e));}
+ finally{showWait(false);}
 };
-
-/*** SETTLE / REFUND ***/
-$("settle").onclick = async () => {
-  try {
-    if (!signer) return alert("Connect wallet first");
-    const e = new ethers.Contract($("escrowAddr").value.trim(), escrowABI, signer);
-    showWait(true);
-    const tx = await e.settle(); console.log("Settle tx:", tx.hash);
-    await tx.wait();
-    setStatus("✅ Settled. Tokens swapped.");
-  } catch (e) {
-    console.error(e);
-    alert("Settle error: " + (e?.message || e));
-  } finally {
-    showWait(false);
-  }
-};
-
-$("refund").onclick = async () => {
-  try {
-    if (!signer) return alert("Connect wallet first");
-    const e = new ethers.Contract($("escrowAddr").value.trim(), escrowABI, signer);
-    const [pE, pW, dE, dW, dl] = await Promise.all([
-      e.providerEsteem(), e.providerWpls(), e.depositedEsteem(), e.depositedWpls(), e.deadline()
-    ]);
-    const now = Math.floor(Date.now()/1000);
-    if (now <= Number(dl)) return alert("Deadline not passed yet.");
-
-    const addr = (await signer.getAddress()).toLowerCase();
-    showWait(true);
-    let tx;
-    if (addr === pE.toLowerCase() && dE && !dW) {
-      tx = await e.refundEsteem(); console.log("Refund ESTEEM tx:", tx.hash);
-    } else if (addr === pW.toLowerCase() && dW && !dE) {
-      tx = await e.refundWpls(); console.log("Refund WPLS tx:", tx.hash);
-    } else {
-      return alert("Refund conditions not met for this wallet.");
-    }
-    await tx.wait();
-    setStatus("✅ Refunded.");
-  } catch (e) {
-    console.error(e);
-    alert("Refund error: " + (e?.message || e));
-  } finally {
-    showWait(false);
-  }
-};
-
-/*** Autofill from link ***/
-const params = new URLSearchParams(location.search);
-const esc = params.get("escrow");
-if (esc) $("escrowAddr").value = esc;
+$("settle").onclick=async()=>{try{
+ const e=new ethers.Contract($("escrowAddr").value.trim(),escrowABI,signer);
+ showWait(true);const tx=await e.settle();await tx.wait();
+ setStatus("✅ Settled. Tokens swapped.");
+}catch(e){alert("Settle error: "+(e.message||e));}finally{showWait(false);}};
+$("refund").onclick=async()=>{try{
+ const e=new ethers.Contract($("escrowAddr").value.trim(),escrowABI,signer);
+ const[pE,pW,dE,dW,dl]=await Promise.all([e.providerEsteem(),e.providerWpls(),e.depositedEsteem(),e.depositedWpls(),e.deadline()]);
+ const now=Math.floor(Date.now()/1000);
+ if(now<=Number(dl))return alert("Deadline not passed.");
+ const addr=(await signer.getAddress()).toLowerCase();
+ showWait(true);let tx;
+ if(addr===pE.toLowerCase()&&dE&&!dW)tx=await e.refundEsteem();
+ else if(addr===pW.toLowerCase()&&dW&&!dE)tx=await e.refundWpls();
+ else return alert("Refund conditions not met.");
+ await tx.wait();setStatus("✅ Refunded.");
+}catch(e){alert("Refund error: "+(e.message||e));}finally{showWait(false);}};
+/* Autofill link param */
+const p=new URLSearchParams(location.search);const esc=p.get("escrow");if(esc)$("escrowAddr").value=esc;
 </script>
 </body>
 </html>
