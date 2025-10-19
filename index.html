@@ -72,7 +72,7 @@
 
 <div id="instructions">
   <b>Quick guide:</b><br><br>
-  1️⃣ <b>Seller</b> connects wallet and creates the escrow (enter buyer address, ESTEEM amount, price in PLS, and deadline).<br>
+  1️⃣ <b>Esteem Seller</b> connects wallet and creates the escrow (enter buyer address, ESTEEM amount, price in PLS, and deadline).<br>
   2️⃣ Share the link or escrow address with the <b>Buyer</b>.<br>
   3️⃣ <b>Both</b> click “Load On-Chain Details” and check the printed numbers match what was agreed.<br>
   4️⃣ <b>Seller</b> clicks “Approve ESTEEM”, then “Deposit ESTEEM”.<br>
@@ -84,7 +84,7 @@
 <script>
 /*** CONFIG ***/
 const READONLY_RPC = "https://rpc.pulsechain.com";
-const FACTORY = "0x0000000000000000000000000000000000000000"; // replace after deploy
+const FACTORY = "0xd4f4606BA258156b0aB8C70F0678Ded67AF8577e"; // replace after deploy
 const ESTEEM = "0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5";
 const DEC = 18;
 
@@ -241,3 +241,4 @@ if(esc)$("escrow").value=esc;
 </script>
 </body>
 </html>
+
