@@ -31,7 +31,7 @@
 </div>
 
 <div class="card">
-  <h3>Create Escrow</h3>
+  <h3>Create Escrow (seller sets terms)</h3>
   <label>Seller address</label><input id="seller" placeholder="0xSeller..."/>
   <label>Buyer address</label><input id="buyer" placeholder="0xBuyer..."/>
   <label>ESTEEM (fixed)</label><input id="esteem" value="0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5" readonly/>
@@ -52,16 +52,35 @@
   <div class="row"><button id="load" class="secondary">Load Summary</button><button id="copy" class="secondary">Copy Link</button></div>
   <pre id="summary">{}</pre>
   <div id="nextActions"></div>
-  <div class="row"><button id="fundSeller" class="ok">Fund Seller</button><button id="fundBuyer" class="ok">Fund Buyer</button></div>
-  <div class="row"><button id="settle">Settle</button><button id="refund" class="warn">Refund</button></div>
+
+  <h4>Seller</h4>
+  <div class="row">
+    <button id="checkAllowSeller" class="secondary">Check Allowance (ESTEEM→Escrow)</button>
+    <button id="approveSeller" class="secondary">Approve ESTEEM</button>
+    <button id="fundSeller" class="ok">Fund Seller</button>
+  </div>
+
+  <h4>Buyer</h4>
+  <div class="row">
+    <button id="checkAllowBuyer" class="secondary">Check Allowance (WPLS→Escrow)</button>
+    <button id="approveBuyer" class="secondary">Approve WPLS</button>
+    <button id="fundBuyer" class="ok">Fund Buyer</button>
+  </div>
+
+  <div class="row" style="margin-top:8px;">
+    <button id="settle">Settle</button>
+    <button id="refund" class="warn">Refund</button>
+  </div>
+
   <div id="actionLog" class="log"></div>
 </div>
 
 <script>
-const FACTORY_ADDRESS = "0x56036e5b154f13DA72c14EB6b618020282A7d622";
-const ESTEEM_ADDR = "0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5";
-const WPLS_ADDR = "0xA1077a294dDE1B09bB078844df40758a5D0f9a27";
+/*** ====== CONFIG ====== ***/
 const PULSE = "0x171";
+const FACTORY_ADDRESS = "0x384e0a4dE045fD82134C2181d78EC2Ca13159ece"; // <— paste your deployed factory here
+const ESTEEM_ADDR     = "0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5";
+const WPLS_ADDR       = "0xA1077a294dDE1B09bB078844df40758a5D0f9a27";
 
 const FACTORY_ABI = [
   "function create(address seller,address buyer,address esteem,address wpls,uint256 amountSell,uint256 amountBuy,uint256 deadline) external returns (address)",
@@ -74,69 +93,206 @@ const ESCROW_ABI = [
   "function settle() external",
   "function refund() external"
 ];
+const ERC20_ABI = [
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)"
+];
 
+/*** ====== STATE ====== ***/
 let provider, signer, account, factory;
 const $ = id => document.getElementById(id);
 const toWei = x => ethers.parseUnits(String(x||"0"),18);
 const fromWei = b => Number(ethers.formatUnits(b??0n,18));
-function log(el,msg){el.textContent += (el.textContent?"\\n":"")+msg;}
+function log(el,msg){el.textContent += (el.textContent?"\n":"")+msg;}
+function set(el,msg){el.textContent = msg;}
+function shareLink(addr){ return location.origin+location.pathname+"?escrow="+addr; }
+function whoActsNext(s){
+  const now = Math.floor(Date.now()/1000), after = now > s.deadline;
+  const name = ["Created","SellerFunded","BuyerFunded","BothFunded","Completed","Cancelled"][s.status];
+  if (name==="Completed") return "✅ Trade completed.";
+  if (name==="Cancelled") return "⚠️ Escrow cancelled.";
+  if (s.sellerFunded && s.buyerFunded) return "Both funded → Either party may click Settle.";
+  if (s.sellerFunded && !s.buyerFunded) return after ? "Deadline passed → Refund returns ESTEEM to seller." : "Seller funded → Buyer must approve WPLS & Fund Buyer.";
+  if (!s.sellerFunded && s.buyerFunded) return after ? "Deadline passed → Refund returns WPLS to buyer." : "Buyer funded → Seller must approve ESTEEM & Fund Seller.";
+  return "No one funded yet → Seller approve+fund; Buyer approve+fund.";
+}
 
+/*** ====== NETWORK ====== ***/
 async function ensurePulse(){
   if(!window.ethereum) throw new Error("Install MetaMask");
-  const chain = await ethereum.request({method:"eth_chainId"});
-  if(chain!==PULSE){
-    try{await ethereum.request({method:"wallet_switchEthereumChain",params:[{chainId:PULSE}]});}
-    catch(e){if(e.code===4902){await ethereum.request({method:"wallet_addEthereumChain",params:[{chainId:PULSE,chainName:"PulseChain",nativeCurrency:{name:"PLS",symbol:"PLS",decimals:18},rpcUrls:["https://rpc.pulsechain.com"],blockExplorerUrls:["https://scan.pulsechain.com"]}]});}}
+  const id = await ethereum.request({method:"eth_chainId"});
+  if(id!==PULSE){
+    try{ await ethereum.request({method:"wallet_switchEthereumChain", params:[{chainId:PULSE}]}); }
+    catch(e){
+      if(e.code===4902){
+        await ethereum.request({method:"wallet_addEthereumChain", params:[{
+          chainId:PULSE, chainName:"PulseChain",
+          nativeCurrency:{ name:"PLS", symbol:"PLS", decimals:18 },
+          rpcUrls:["https://rpc.pulsechain.com"], blockExplorerUrls:["https://scan.pulsechain.com"]
+        }]});
+      } else { throw e; }
+    }
   }
 }
 
-$("connect").onclick = async()=>{
-  await ensurePulse();
-  provider=new ethers.BrowserProvider(window.ethereum);
-  await provider.send("eth_requestAccounts",[]);
-  signer=await provider.getSigner();
-  account=await signer.getAddress();
-  factory=new ethers.Contract(FACTORY_ADDRESS,FACTORY_ABI,signer);
-  $("net").textContent="🟢 Connected: "+account;
-};
-$("reset").onclick=()=>location.reload();
+$("connect").onclick = async () => {
+  try {
+    await ensurePulse();
+    provider = new ethers.BrowserProvider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+    signer = await provider.getSigner();
+    account = await signer.getAddress();
+    factory = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, signer);
+    set($("net"), "🟢 Connected: "+account+" (PulseChain)");
 
-$("create").onclick=async()=>{
-  const s=$("seller").value.trim(),b=$("buyer").value.trim();
-  const asell=toWei($("amountSellHuman").value.trim()),abuy=toWei($("amountBuyHuman").value.trim());
-  const dl=Math.floor(Date.now()/1000)+Number($("mins").value||0)*60;
-  const out=$("createLog"); out.textContent="";
-  try{
-    const tx=await factory.create(s,b,ESTEEM_ADDR,WPLS_ADDR,asell,abuy,dl);
-    log(out,"Tx sent: "+tx.hash);
-    const rc=await tx.wait();
-    const ev=rc.logs.find(l=>l.fragment?.name==="EscrowCreated");
-    const addr=ev?ev.args.escrow:"unknown";
-    log(out,"✅ Escrow created at "+addr);
-    $("escrowAddr").value=addr;
-    const url=location.origin+location.pathname+"?escrow="+addr;
-    $("share").innerHTML=`Share link: <a href='${url}'>${url}</a>`;
-  }catch(e){log(out,"❌ "+(e.message||e));}
+    const q = new URLSearchParams(location.search).get("escrow");
+    if (q) { $("escrowAddr").value = q; $("load").click(); }
+  } catch (e) { set($("net"), "❌ "+(e.message||e)); }
+};
+$("reset").onclick = () => location.reload();
+
+/*** ====== CREATE ESCROW ====== ***/
+$("create").onclick = async () => {
+  const out = $("createLog"); out.textContent = "";
+  try {
+    if (!signer) throw new Error("Connect wallet first");
+    const seller = $("seller").value.trim();
+    const buyer  = $("buyer").value.trim();
+    if (!ethers.isAddress(seller) || !ethers.isAddress(buyer)) throw new Error("Invalid seller/buyer");
+    const amountSell = toWei($("amountSellHuman").value.trim());
+    const amountBuy  = toWei($("amountBuyHuman").value.trim());
+    const deadline   = Math.floor(Date.now()/1000) + Number($("mins").value||0)*60;
+
+    const tx = await factory.create(seller, buyer, ESTEEM_ADDR, WPLS_ADDR, amountSell, amountBuy, deadline);
+    log(out, "Tx sent: "+tx.hash);
+
+    const rc = await tx.wait();
+    // Robust log parsing (avoids “unknown”)
+    const iface = new ethers.Interface(FACTORY_ABI);
+    let escrowAddr = null;
+    for (const lg of rc.logs) {
+      try {
+        const parsed = iface.parseLog(lg);
+        if (parsed?.name === "EscrowCreated") { escrowAddr = parsed.args.escrow; break; }
+      } catch {}
+    }
+    if (!escrowAddr) throw new Error("EscrowCreated event not found");
+    log(out, "✅ Escrow created at "+escrowAddr);
+    $("escrowAddr").value = escrowAddr;
+    $("share").innerHTML = `Share link: <a href="${shareLink(escrowAddr)}">${shareLink(escrowAddr)}</a>`;
+  } catch (e) { log(out, "❌ "+(e.message||e)); }
 };
 
-$("load").onclick=async()=>{
-  const addr=$("escrowAddr").value.trim(),out=$("summary"),nxt=$("nextActions");
-  try{
-    const esc=new ethers.Contract(addr,ESCROW_ABI,provider||new ethers.BrowserProvider(window.ethereum));
-    const s=await esc.summary();
-    const d={seller:s[0],buyer:s[1],esteem:s[2],wpls:s[3],amountSell:fromWei(s[4])+' ESTEEM',amountBuy:fromWei(s[5])+' WPLS',deadline:new Date(Number(s[6])*1000).toLocaleString(),sellerFunded:s[7],buyerFunded:s[8],status:Number(s[9])};
-    out.textContent=JSON.stringify(d,null,2);
-    nxt.textContent=(d.sellerFunded&&d.buyerFunded)?"Both funded → either may Settle":(!d.sellerFunded&&d.buyerFunded)?"Buyer funded → seller must fund ESTEEM":(d.sellerFunded&&!d.buyerFunded)?"Seller funded → buyer must fund WPLS":"No one funded yet";
-  }catch(e){out.textContent="❌ "+(e.message||e);}
+/*** ====== SUMMARY / NEXT STEPS ====== ***/
+$("load").onclick = async () => {
+  const addr = $("escrowAddr").value.trim(), out = $("summary"), nxt = $("nextActions");
+  try {
+    const esc = new ethers.Contract(addr, ESCROW_ABI, provider || new ethers.BrowserProvider(window.ethereum));
+    const s = await esc.summary();
+    const data = {
+      seller: s[0], buyer: s[1], esteem: s[2], wpls: s[3],
+      amountSellWei: s[4].toString(), amountBuyWei: s[5].toString(),
+      amountSell: Number(ethers.formatUnits(s[4],18))+" ESTEEM",
+      amountBuy:  Number(ethers.formatUnits(s[5],18))+" WPLS",
+      deadline: Number(s[6]),
+      deadlineAt: new Date(Number(s[6])*1000).toLocaleString(),
+      sellerFunded: s[7], buyerFunded: s[8], status: Number(s[9])
+    };
+    out.textContent = JSON.stringify(data, null, 2);
+    $("nextActions").textContent = whoActsNext(data);
+  } catch (e) { out.textContent = "❌ "+(e.message||e); }
+};
+$("copy").onclick = async () => {
+  const a = $("escrowAddr").value.trim();
+  await navigator.clipboard.writeText(shareLink(a));
 };
 
-$("copy").onclick=async()=>{const a=$("escrowAddr").value.trim();await navigator.clipboard.writeText(location.origin+location.pathname+"?escrow="+a);};
-async function act(fn){const a=$("escrowAddr").value.trim(),o=$("actionLog");try{const esc=new ethers.Contract(a,ESCROW_ABI,signer);const tx=await esc[fn]();log(o,fn+"…"+tx.hash);await tx.wait();log(o,"✅ "+fn+" confirmed");$("load").click();}catch(e){log(o,"❌ "+(e.message||e));}}
-$("fundSeller").onclick=()=>act("fundSeller");
-$("fundBuyer").onclick=()=>act("fundBuyer");
-$("settle").onclick=()=>act("settle");
-$("refund").onclick=()=>act("refund");
+/*** ====== ALLOWANCE & FUNDING ====== ***/
+async function checkAllowance(tokenAddr, owner, spender) {
+  const t = new ethers.Contract(tokenAddr, ERC20_ABI, provider || new ethers.BrowserProvider(window.ethereum));
+  return await t.allowance(owner, spender);
+}
+async function approveTo(tokenAddr, spender, amount) {
+  const t = new ethers.Contract(tokenAddr, ERC20_ABI, signer);
+  const tx = await t.approve(spender, amount);
+  return await tx.wait();
+}
+
+$("checkAllowSeller").onclick = async () => {
+  const logBox = $("actionLog");
+  try {
+    if (!signer) throw new Error("Connect wallet");
+    $("load").click();
+    const owner = await signer.getAddress();
+    const spender = $("escrowAddr").value.trim();
+    const a = await checkAllowance(ESTEEM_ADDR, owner, spender);
+    log(logBox, `Seller allowance ESTEEM→Escrow: ${a.toString()}`);
+  } catch (e) { log(logBox, "❌ "+(e.message||e)); }
+};
+$("approveSeller").onclick = async () => {
+  const logBox = $("actionLog");
+  try {
+    if (!signer) throw new Error("Connect wallet"); $("load").click();
+    const sum = JSON.parse($("summary").textContent);
+    const txr = await approveTo(ESTEEM_ADDR, $("escrowAddr").value.trim(), BigInt(sum.amountSellWei));
+    log(logBox, "✅ ESTEEM approved, block "+txr.blockNumber);
+  } catch (e) { log(logBox, "❌ "+(e.message||e)); }
+};
+$("fundSeller").onclick = async () => {
+  const logBox = $("actionLog");
+  try {
+    const a = $("escrowAddr").value.trim();
+    const esc = new ethers.Contract(a, ESCROW_ABI, signer);
+    const tx = await esc.fundSeller(); const rc = await tx.wait();
+    log(logBox, "✅ Seller funded (ESTEEM), tx "+tx.hash);
+    $("load").click();
+  } catch (e) { log(logBox, "❌ "+(e.message||e)); }
+};
+
+$("checkAllowBuyer").onclick = async () => {
+  const logBox = $("actionLog");
+  try {
+    if (!signer) throw new Error("Connect wallet");
+    $("load").click();
+    const owner = await signer.getAddress();
+    const spender = $("escrowAddr").value.trim();
+    const a = await checkAllowance(WPLS_ADDR, owner, spender);
+    log(logBox, `Buyer allowance WPLS→Escrow: ${a.toString()}`);
+  } catch (e) { log(logBox, "❌ "+(e.message||e)); }
+};
+$("approveBuyer").onclick = async () => {
+  const logBox = $("actionLog");
+  try {
+    if (!signer) throw new Error("Connect wallet"); $("load").click();
+    const sum = JSON.parse($("summary").textContent);
+    const txr = await approveTo(WPLS_ADDR, $("escrowAddr").value.trim(), BigInt(sum.amountBuyWei));
+    log(logBox, "✅ WPLS approved, block "+txr.blockNumber);
+  } catch (e) { log(logBox, "❌ "+(e.message||e)); }
+};
+$("fundBuyer").onclick = async () => {
+  const logBox = $("actionLog");
+  try {
+    const a = $("escrowAddr").value.trim();
+    const esc = new ethers.Contract(a, ESCROW_ABI, signer);
+    const tx = await esc.fundBuyer(); const rc = await tx.wait();
+    log(logBox, "✅ Buyer funded (WPLS), tx "+tx.hash);
+    $("load").click();
+  } catch (e) { log(logBox, "❌ "+(e.message||e)); }
+};
+
+/*** ====== SETTLE / REFUND ====== ***/
+async function act(fn){
+  const logBox = $("actionLog");
+  try {
+    const a = $("escrowAddr").value.trim();
+    const esc = new ethers.Contract(a, ESCROW_ABI, signer);
+    const tx = await esc[fn](); const rc = await tx.wait();
+    log(logBox, `✅ ${fn} confirmed, tx ${tx.hash}`);
+    $("load").click();
+  } catch (e) { log(logBox, "❌ "+(e.message||e)); }
+}
+$("settle").onclick = () => act("settle");
+$("refund").onclick = () => act("refund");
 </script>
 </body>
 </html>
-
