@@ -24,12 +24,20 @@
 </head>
 <body>
 <div style="text-align:center;margin-top:20px;margin-bottom:30px;">
-  <div style="font-size:4em;line-height:1;">🐦‍⬛</div>
+  <div style="display:flex;justify-content:center;align-items:center;gap:12px;">
+    <img 
+      src="https://dapp.betterbank.io/BBlogo-purple-main-circle.png" 
+      alt="BetterBank logo" 
+      style="width:48px;height:48px;object-fit:contain;"
+    >
+    <div style="font-size:4em;line-height:1;">🐦‍⬛</div>
+  </div>
+
   <h1 style="margin:10px 0 0;font-size:2em;">Pulsecrow</h1>
-  <h1 style="margin:10px 0 5px;font-size:2em;">Esteem ↔ WPLS Escrow</h1>
+  <h1 style="margin:5px 0 10px;font-size:2em;">Esteem ↔ WPLS Escrow</h1>
   <p style="max-width:600px;margin:0 auto;font-size:1.1em;color:#333;">
-    A Trustless escrow between two parties — the seller deposits <strong>ESTEEM</strong>,
-    the buyer pays with <strong>WPLS</strong>, and either side can settle (or refund after the deadline).
+    A simple, trustless escrow between two parties — the seller deposits <strong>ESTEEM</strong>,
+    the buyer pays with <strong>WPLS</strong>, and either side can settle or refund after the deadline.
   </p>
 </div>
 
@@ -305,6 +313,7 @@ $("refund").onclick = () => act("refund");
 </script>
 </body>
 </html>
+
 
 
 
