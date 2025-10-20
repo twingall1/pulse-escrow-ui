@@ -35,7 +35,7 @@
   <label>Seller address</label><input id="seller" placeholder="0xSeller..."/>
   <label>Buyer address</label><input id="buyer" placeholder="0xBuyer..."/>
   <label>ESTEEM (fixed)</label><input id="esteem" value="0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5" readonly/>
-  <label>WPLS (fixed)</label><input id="wpls" value="0xa1077a294dde1b09bb078844df40758a5d0f9a27" readonly/>
+  <label>WPLS (fixed)</label><input id="wpls" value="0xA1077a294dDE1B09bB078844df40758a5D0f9a27" readonly/>
   <div class="row">
     <div><label>ESTEEM amount (tokens)</label><input id="amountSellHuman" placeholder="e.g. 100"/></div>
     <div><label>WPLS amount (tokens)</label><input id="amountBuyHuman" placeholder="e.g. 1.5"/></div>
@@ -60,12 +60,12 @@
 <script>
 const FACTORY_ADDRESS = "0x184aB584C9264C071f7761410CE6B88f02CC1AF7";
 const ESTEEM_ADDR = "0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5";
-const WPLS_ADDR = "0xa1077a294dde1b09bb078844df40758a5d0f9a27";
+const WPLS_ADDR = "0xA1077a294dDE1B09bB078844df40758a5D0f9a27";
 const PULSE = "0x171";
 
 const FACTORY_ABI = [
-  "function create(address,address,address,address,uint256,uint256,uint256) external returns (address)",
-  "event EscrowCreated(address,address,address,address,address,uint256,uint256,uint256)"
+  "function create(address seller,address buyer,address esteem,address wpls,uint256 amountSell,uint256 amountBuy,uint256 deadline) external returns (address)",
+  "event EscrowCreated(address indexed escrow,address indexed seller,address indexed buyer,address esteem,address wpls,uint256 amountSell,uint256 amountBuy,uint256 deadline)"
 ];
 const ESCROW_ABI = [
   "function summary() view returns (address,address,address,address,uint256,uint256,uint256,bool,bool,uint8)",
