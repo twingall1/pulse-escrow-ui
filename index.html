@@ -6,14 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 40px auto; padding: 20px; line-height: 1.4; }
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 40px auto; padding: 20px; line-height: 1.5; color:#222;}
     h1 { font-size: 1.8em; margin-bottom: 0.3em; }
     h2 { margin-top: 1.5em; }
-    input, button { width: 100%; padding: 8px; margin: 6px 0; font-size: 15px; }
-    button { cursor: pointer; border: none; background: #0055ff; color: white; border-radius: 6px; }
-    button:hover { background: #003fcc; }
-    pre { background: #f5f5f5; padding: 10px; border-radius: 6px; overflow-x: auto; }
-    .card { border: 1px solid #ccc; border-radius: 8px; padding: 16px; margin: 18px 0; }
+    input, button { width: 100%; padding: 10px; margin: 6px 0; font-size: 15px; box-sizing:border-box;}
+    button { cursor: pointer; border: none; background: #0066ff; color: white; border-radius: 6px; font-weight:600;}
+    button:hover { background: #004ecc; }
+    pre { background: #f5f5f5; padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 13px;}
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 20px 0; box-shadow:0 2px 5px rgba(0,0,0,0.05);}
+    label { font-weight: 600; display:block; margin-top:8px;}
+    small { color:#666; }
   </style>
 </head>
 <body>
@@ -24,19 +26,26 @@
 
 <div class="card">
   <h2>Create Escrow</h2>
-  <input id="seller" placeholder="Seller address (0x...)" />
-  <input id="buyer" placeholder="Buyer address (0x...)" />
-  <input id="esteem" placeholder="Esteem token address (0x...)" />
-  <input id="amountSell" placeholder="Esteem amount (in wei)" />
-  <input id="amountBuy" placeholder="PLS amount (in wei)" />
-  <input id="deadline" placeholder="Deadline (unix timestamp)" />
+  <label>Seller address</label>
+  <input id="seller" placeholder="0x..." />
+  <label>Buyer address</label>
+  <input id="buyer" placeholder="0x..." />
+  <label>Esteem token (fixed)</label>
+  <input id="esteem" value="0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5" readonly style="background:#eee;" />
+  <label>Esteem amount (wei)</label>
+  <input id="amountSell" placeholder="e.g. 100000000000000000000 for 100 ESTEEM" />
+  <label>PLS amount (wei)</label>
+  <input id="amountBuy" placeholder="e.g. 1000000000000000000 for 1 PLS" />
+  <label>Deadline (minutes from now)</label>
+  <input id="minutesFromNow" type="number" placeholder="e.g. 60 for one hour" />
   <button id="createBtn">Create Escrow</button>
   <p id="createOutput"></p>
 </div>
 
 <div class="card">
   <h2>Interact with Escrow</h2>
-  <input id="escrowAddress" placeholder="Escrow contract address (0x...)" />
+  <label>Escrow contract address</label>
+  <input id="escrowAddress" placeholder="0x..." />
   <button id="summaryBtn">Get Summary</button>
   <pre id="summaryOutput"></pre>
   <button id="fundSellerBtn">Fund Seller (send Esteem)</button>
@@ -48,6 +57,7 @@
 
 <script>
 const FACTORY_ADDRESS = "0xbc55C804D28960D454b1C25eBEe45f99933abAc1";
+const ESTEEM_ADDR = "0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5";
 
 const FACTORY_ABI = [
   "function create(address,address,address,uint256,uint256,uint256) external returns (address)",
@@ -65,10 +75,7 @@ const ESCROW_ABI = [
 let provider, signer, factory;
 
 async function connect() {
-  if (!window.ethereum) {
-    alert("Please install MetaMask!");
-    return;
-  }
+  if (!window.ethereum) return alert("Please install MetaMask!");
   provider = new ethers.BrowserProvider(window.ethereum);
   await provider.send("eth_requestAccounts", []);
   signer = await provider.getSigner();
@@ -80,10 +87,11 @@ async function connect() {
 async function createEscrow() {
   const s = document.getElementById("seller").value.trim();
   const b = document.getElementById("buyer").value.trim();
-  const e = document.getElementById("esteem").value.trim();
+  const e = ESTEEM_ADDR;
   const asell = document.getElementById("amountSell").value.trim();
   const abuy = document.getElementById("amountBuy").value.trim();
-  const dl = document.getElementById("deadline").value.trim();
+  const mins = parseInt(document.getElementById("minutesFromNow").value.trim() || "0");
+  const dl = Math.floor(Date.now() / 1000) + mins * 60;
 
   const out = document.getElementById("createOutput");
   try {
@@ -110,7 +118,7 @@ async function showSummary() {
       esteem: s[2],
       amountSell: s[3].toString(),
       amountBuy: s[4].toString(),
-      deadline: s[5].toString(),
+      deadline: new Date(s[5] * 1000).toLocaleString(),
       sellerFunded: s[6],
       buyerFunded: s[7],
       status: s[8]
