@@ -4,7 +4,10 @@
 <meta charset="UTF-8" />
 <title>Trustless Atomic Swap – PulseChain (369)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.min.js"></script>
+
+<!-- ✅ load ethers first -->
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.9.0/dist/ethers.umd.min.js"></script>
+
 <style>
   body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 900px; margin: 28px auto; padding: 0 14px; }
   h2 { margin-top: 0; }
@@ -23,31 +26,33 @@
   a { color:#0a58ca; text-decoration:none; }
 </style>
 </head>
+
 <body>
 <h2>Trustless Atomic Escrow – PulseChain (369)</h2>
-<p>Factory-spawned, per-trade escrow with deterministic addresses (CREATE2). No owner. No upgrades. Fully atomic swap.</p>
+<p>Factory-spawned, per-trade escrow with deterministic addresses (CREATE2).  
+No owner. No upgrades. Fully atomic swap.</p>
 
 <button id="connectBtn">1) Connect Wallet</button>
 <button id="switchBtn">2) Switch to PulseChain</button>
 
 <fieldset>
-  <legend><b>Create / Predict</b></legend>
+  <legend><b>Create / Predict a New Escrow</b></legend>
   <div class="row">
     <div>
-      <label>Party A (sender of Token A) <input id="partyA" placeholder="0x..." /></label>
-      <label>Token A address
+      <label><b>Party A – sender of ESTEEM (Token A)</b> <input id="partyA" placeholder="0x..." /></label>
+      <label>Token A (ESTEEM) address
         <input id="tokenA" />
-        <small>ESTEEM – pre-filled PulseChain address</small>
+        <small>Pre-filled ESTEEM address on PulseChain</small>
       </label>
-      <label>Amount A (human units) <input id="amountA" type="number" step="any" placeholder="e.g., 123.45" /></label>
+      <label>Amount A (ESTEEM) <input id="amountA" type="number" step="any" placeholder="e.g., 100" /></label>
     </div>
     <div>
-      <label>Party B (sender of Token B) <input id="partyB" placeholder="0x..." /></label>
-      <label>Token B address
+      <label><b>Party B – sender of eDAI (Token B)</b> <input id="partyB" placeholder="0x..." /></label>
+      <label>Token B (eDAI) address
         <input id="tokenB" value="0xefd766ccb38eaf1dfd701853bfce31359239f305" />
         <small>eDAI – 18 decimals</small>
       </label>
-      <label>Amount B (human units) <input id="amountB" type="number" step="any" placeholder="e.g., 678.90" /></label>
+      <label>Amount B (eDAI) <input id="amountB" type="number" step="any" placeholder="e.g., 250" /></label>
     </div>
   </div>
 
@@ -75,7 +80,7 @@
 </fieldset>
 
 <fieldset>
-  <legend><b>Interact with an existing Escrow</b></legend>
+  <legend><b>Interact with an Existing Escrow</b></legend>
   <label>Escrow Address <input id="escrowAddr" placeholder="0x..." /></label>
   <div class="row">
     <button id="readAllBtn">Read Parameters & Status</button>
@@ -84,17 +89,17 @@
 
   <div class="row">
     <div>
-      <button id="approveA">Approve A Amount</button>
-      <button id="depositA">Deposit A</button>
+      <button id="approveA">Approve A (ESTEEM)</button>
+      <button id="depositA">Deposit A (ESTEEM)</button>
     </div>
     <div>
-      <button id="approveB">Approve B Amount</button>
-      <button id="depositB">Deposit B</button>
+      <button id="approveB">Approve B (eDAI)</button>
+      <button id="depositB">Deposit B (eDAI)</button>
     </div>
   </div>
 
   <div class="row">
-    <div><button id="settleBtn">Settle (Atomic)</button></div>
+    <div><button id="settleBtn">Settle (Atomic Swap)</button></div>
     <div><button id="refundBtn">Refund (after deadline)</button></div>
   </div>
 
@@ -107,10 +112,10 @@
 </fieldset>
 
 <script>
-/* ---------- CONFIG (PUT YOUR VALUES) ---------- */
-const DEFAULT_FACTORY = "0x571594b57fa8E8c2Cd426ABe4D91D2d594755a90";      // 👈 REPLACE with your deployed factory
-const ESTEEM_ADDR     = "0x9fdce721c528e6dbc4f494f3e80b9b28a3059ab5";  // 👈 REPLACE with ESTEEM on PulseChain
-const PLS_CHAIN_ID_HEX = "0x171"; // 369 decimal
+/* ---------- CONFIG (put your values) ---------- */
+const DEFAULT_FACTORY = "0x571594b57fa8E8c2Cd426ABe4D91D2d594755a90";      // 👈 your deployed factory
+const ESTEEM_ADDR     = "0x9FDCe721c528e6dbc4f494F3E80B9b28a3059aB5";  // 👈 ESTEEM token on PulseChain
+const PLS_CHAIN_ID_HEX = "0x171"; // 369
 const PLS_RPC = "https://rpc.pulsechain.com";
 const PLS_EXPLORER = "https://explorer.pulsechain.com";
 const SOURCIFY_BASE = "https://repo.sourcify.dev/369";
@@ -138,7 +143,6 @@ const ESCROW_ABI = [
   "function refund()"
 ];
 const ERC20_ABI = [
-  "function name() view returns (string)",
   "function symbol() view returns (string)",
   "function decimals() view returns (uint8)",
   "function allowance(address owner, address spender) view returns (uint256)",
@@ -147,40 +151,25 @@ const ERC20_ABI = [
 
 /* ---------- GLOBALS ---------- */
 let provider, signer;
-
-/* ---------- UTIL ---------- */
 function $(id){ return document.getElementById(id); }
-function a(href, text){ return `<a href="${href}" target="_blank">${text}</a>`; }
 function log(msg, cls){ $("log").innerHTML = `<div class="${cls||""}">${msg}</div>\n` + $("log").innerHTML; }
-function fmtUnits(v, d){ try { return ethers.formatUnits(v, d); } catch { return v.toString(); } }
-async function getTokenMeta(address) {
-  const c = new ethers.Contract(address, ERC20_ABI, provider||signer);
-  let symbol = address.slice(0,6)+"…"+address.slice(-4);
-  let decimals = 18;
-  try { symbol = await c.symbol(); } catch {}
-  try { decimals = await c.decimals(); } catch {}
-  return { symbol, decimals, contract: c };
-}
-function getFactoryAddr(){ return $("factoryAddr").value.trim() || DEFAULT_FACTORY; }
+function a(href,text){ return `<a href="${href}" target="_blank">${text}</a>`; }
 
 /* ---------- CONNECT / SWITCH ---------- */
-async function connect() {
-  try {
-    if (!window.ethereum) { log("No wallet found. Install MetaMask or compatible.", "err"); return; }
-    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-    if (!accounts || !accounts.length) { log("Connection cancelled.", "warn"); return; }
+async function connect(){
+  try{
+    if(!window.ethereum){ log("❌ No wallet found. Install MetaMask.", "err"); return; }
+    const accounts = await window.ethereum.request({method:"eth_requestAccounts"});
+    if(!accounts?.length){ log("Connection cancelled.", "warn"); return; }
     provider = new ethers.BrowserProvider(window.ethereum);
     signer = await provider.getSigner();
-    const addr = await signer.getAddress();
-    log(`✅ Wallet connected: ${addr}`, "ok");
-  } catch (err) {
-    log(`Connection error: ${err.message}`, "err");
-  }
+    log(`✅ Connected wallet: ${await signer.getAddress()}`, "ok");
+  }catch(e){ log(`Connection error: ${e.message}`, "err"); }
 }
 async function switchToPulse(){
   try{
     await ethereum.request({method:"wallet_switchEthereumChain", params:[{chainId:PLS_CHAIN_ID_HEX}]});
-    log("Switched to PulseChain", "ok");
+    log("✅ Switched to PulseChain", "ok");
   }catch(e){
     if(e.code===4902){
       await ethereum.request({
@@ -188,218 +177,98 @@ async function switchToPulse(){
         params:[{chainId:PLS_CHAIN_ID_HEX, chainName:"PulseChain", rpcUrls:[PLS_RPC],
           nativeCurrency:{name:"PLS",symbol:"PLS",decimals:18}, blockExplorerUrls:[PLS_EXPLORER]}]
       });
-      log("PulseChain added. Switch again if needed.", "ok");
-    } else log(`Switch error: ${e.message}`, "err");
+      log("PulseChain added. Try switching again.", "ok");
+    }else log(`Switch error: ${e.message}`, "err");
   }
 }
 
-/* ---------- FORM → PARAMS (minutes → deadline) ---------- */
-async function gatherParams() {
+/* ---------- HELPERS ---------- */
+async function getTokenMeta(addr){
+  const c = new ethers.Contract(addr, ERC20_ABI, provider||signer);
+  let symbol = addr.slice(0,6)+"…"+addr.slice(-4);
+  let decimals = 18;
+  try{ symbol = await c.symbol(); }catch{}
+  try{ decimals = await c.decimals(); }catch{}
+  return {symbol,decimals,contract:c};
+}
+function getFactoryAddr(){ return $("factoryAddr").value.trim() || DEFAULT_FACTORY; }
+function fmtUnits(v,d){ try{return ethers.formatUnits(v,d);}catch{return v.toString();} }
+
+/* ---------- CORE ---------- */
+async function gather(){
   const tokenA = $("tokenA").value.trim();
   const tokenB = $("tokenB").value.trim();
   const partyA = $("partyA").value.trim();
   const partyB = $("partyB").value.trim();
   const amountA = $("amountA").value || "0";
   const amountB = $("amountB").value || "0";
-  const minsFromNow = parseInt($("deadlineMins").value, 10) || 60;
-  const deadline = Math.floor(Date.now()/1000) + minsFromNow*60;
-
-  if (!tokenA || !tokenB || !partyA || !partyB) throw new Error("All fields required.");
-
+  const mins = parseInt($("deadlineMins").value,10)||60;
+  const deadline = Math.floor(Date.now()/1000)+(mins*60);
   const metaA = await getTokenMeta(tokenA);
   const metaB = await getTokenMeta(tokenB);
-
-  const amountAWei = ethers.parseUnits(amountA, metaA.decimals);
-  const amountBWei = ethers.parseUnits(amountB, metaB.decimals);
-
-  return { tokenA, tokenB, partyA, partyB, amountAWei, amountBWei, deadline, metaA, metaB };
+  return {
+    tokenA,tokenB,partyA,partyB,
+    amountAWei:ethers.parseUnits(amountA,metaA.decimals),
+    amountBWei:ethers.parseUnits(amountB,metaB.decimals),
+    deadline,metaA,metaB
+  };
 }
 
-/* ---------- PREDICT / DEPLOY ---------- */
-async function predictAddress() {
+async function predictAddress(){
   try{
-    const fAddr = getFactoryAddr();
-    const factory = new ethers.Contract(fAddr, FACTORY_ABI, provider||signer);
-    const p = await gatherParams();
-    const predicted = await factory.predictAddress(
-      p.partyA, p.partyB, p.tokenA, p.tokenB, p.amountAWei, p.amountBWei, p.deadline
-    );
+    const f = getFactoryAddr();
+    const fac = new ethers.Contract(f, FACTORY_ABI, provider||signer);
+    const p = await gather();
+    const predicted = await fac.predictAddress(p.partyA,p.partyB,p.tokenA,p.tokenB,p.amountAWei,p.amountBWei,p.deadline);
     $("predicted").value = predicted;
-
-    $("preview").innerHTML = `
-      <p><b>Review immutable terms:</b></p>
-      <ul class="mono">
-        <li>partyA: ${p.partyA}</li>
-        <li>partyB: ${p.partyB}</li>
-        <li>tokenA: ${p.tokenA} (${p.metaA.symbol}, ${p.metaA.decimals} dp)</li>
-        <li>amountA: ${fmtUnits(p.amountAWei, p.metaA.decimals)} ${p.metaA.symbol}</li>
-        <li>tokenB: ${p.tokenB} (${p.metaB.symbol}, ${p.metaB.decimals} dp)</li>
-        <li>amountB: ${fmtUnits(p.amountBWei, p.metaB.decimals)} ${p.metaB.symbol}</li>
-        <li>deadline: ${p.deadline} (${new Date(p.deadline*1000).toLocaleString()})</li>
-      </ul>
-      <p>Predicted Escrow: <code class="mono">${predicted}</code><br>
-        ${a(`${PLS_EXPLORER}/address/${predicted}`, "View on Explorer")}
-      </p>`;
-    log("Predicted address computed.", "ok");
-  }catch(e){ log(`Predict error: ${e.message}`, "err"); }
+    $("preview").innerHTML =
+      `<p><b>Immutable terms</b></p>
+       <ul class="mono">
+       <li>Party A: ${p.partyA}</li>
+       <li>Party B: ${p.partyB}</li>
+       <li>Token A (ESTEEM): ${p.tokenA}</li>
+       <li>Amount A: ${fmtUnits(p.amountAWei,p.metaA.decimals)} ${p.metaA.symbol}</li>
+       <li>Token B (eDAI): ${p.tokenB}</li>
+       <li>Amount B: ${fmtUnits(p.amountBWei,p.metaB.decimals)} ${p.metaB.symbol}</li>
+       <li>Deadline: ${new Date(p.deadline*1000).toLocaleString()}</li>
+       </ul>
+       <p>Predicted Escrow: <code class="mono">${predicted}</code><br>
+       ${a(`${PLS_EXPLORER}/address/${predicted}`,"View on Explorer")}</p>`;
+    log("✅ Predicted address computed.", "ok");
+  }catch(e){ log(`Predict error: ${e.message}`,"err"); }
 }
 
-async function deployEscrow() {
+async function deployEscrow(){
   try{
     if(!signer) await connect();
-    const fAddr = getFactoryAddr();
-    const factory = new ethers.Contract(fAddr, FACTORY_ABI, signer);
-    const p = await gatherParams();
-
-    const tx = await factory.createSwap(
-      p.partyA, p.partyB, p.tokenA, p.tokenB, p.amountAWei, p.amountBWei, p.deadline
-    );
-    log(`Deploy tx sent: ${tx.hash}`, "warn");
+    const f = getFactoryAddr();
+    const fac = new ethers.Contract(f, FACTORY_ABI, signer);
+    const p = await gather();
+    const tx = await fac.createSwap(p.partyA,p.partyB,p.tokenA,p.tokenB,p.amountAWei,p.amountBWei,p.deadline);
+    log(`Tx sent: ${tx.hash}`,"warn");
     const rcpt = await tx.wait();
-
-    // Parse event
+    const iface = new ethers.Interface(FACTORY_ABI);
     let escrow = $("predicted").value;
-    try {
-      const iface = new ethers.Interface(FACTORY_ABI);
-      for (const lg of rcpt.logs) {
-        try {
-          const parsed = iface.parseLog(lg);
-          if (parsed && parsed.name === "SwapCreated") { escrow = parsed.args.escrow; break; }
-        } catch {}
-      }
-    } catch {}
-
-    $("escrowAddr").value = escrow;
-    $("links").innerHTML = `
-      <p>
-        ${a(`${PLS_EXPLORER}/address/${escrow}`, "Escrow on Explorer")} |
-        ${a(`${SOURCIFY_BASE}/${fAddr}/`, "Verify Factory on Sourcify")}
-      </p>`;
-    log(`Escrow deployed at ${escrow}`, "ok");
-  }catch(e){ log(`Deploy error: ${e.message}`, "err"); }
+    for(const lg of rcpt.logs){
+      try{const parsed=iface.parseLog(lg);if(parsed?.name==="SwapCreated")escrow=parsed.args.escrow;}catch{}
+    }
+    $("escrowAddr").value=escrow;
+    $("links").innerHTML=
+      `<p>${a(`${PLS_EXPLORER}/address/${escrow}`,"Escrow on Explorer")} |
+       ${a(`${SOURCIFY_BASE}/${f}/`,"Verify Factory on Sourcify")}</p>`;
+    log(`✅ Deployed Escrow at ${escrow}`,"ok");
+  }catch(e){ log(`Deploy error: ${e.message}`,"err"); }
 }
 
-/* ---------- INTERACTION ---------- */
-async function readAll() {
-  try{
-    const escrow = $("escrowAddr").value.trim();
-    if (!escrow) return log("Enter escrow address.", "err");
-    const c = new ethers.Contract(escrow, ESCROW_ABI, provider||signer);
-    const [a1, b1, ta, tb, aAmt, bAmt, dl, depA, depB] = await Promise.all([
-      c.partyA(), c.partyB(), c.tokenA(), c.tokenB(), c.amountA(), c.amountB(), c.deadline(), c.depositedA(), c.depositedB()
-    ]);
-    const metaA = await getTokenMeta(ta);
-    const metaB = await getTokenMeta(tb);
-    const [,, timeLeft, finished] = await c.status();
+/* ---------- EVENT WIRING ---------- */
+window.addEventListener("DOMContentLoaded",()=>{
+  if(DEFAULT_FACTORY) $("factoryAddr").value=DEFAULT_FACTORY;
+  if(ESTEEM_ADDR) $("tokenA").value=ESTEEM_ADDR;
 
-    $("links").innerHTML = `
-      <p>
-        ${a(`${PLS_EXPLORER}/address/${escrow}`, "Escrow on Explorer")} |
-        ${a(`${PLS_EXPLORER}/address/${ta}`, `TokenA (${metaA.symbol})`)} |
-        ${a(`${PLS_EXPLORER}/address/${tb}`, `TokenB (${metaB.symbol})`)}
-      </p>`;
-
-    log(
-`Escrow params:
-  partyA: ${a1}
-  partyB: ${b1}
-  tokenA: ${ta} (${metaA.symbol}, ${metaA.decimals})
-  amountA: ${fmtUnits(aAmt, metaA.decimals)} ${metaA.symbol}
-  tokenB: ${tb} (${metaB.symbol}, ${metaB.decimals})
-  amountB: ${fmtUnits(bAmt, metaB.decimals)} ${metaB.symbol}
-  deadline: ${dl} (${new Date(Number(dl)*1000).toLocaleString()})
-
-Status:
-  depositedA: ${depA}
-  depositedB: ${depB}
-  timeLeft: ${Number(timeLeft)}s
-  finished: ${finished}
-`, "ok");
-  }catch(e){ log(`Read error: ${e.message}`, "err"); }
-}
-async function refreshStatus() {
-  try{
-    const escrow = $("escrowAddr").value.trim();
-    if (!escrow) return log("Enter escrow address.", "err");
-    const c = new ethers.Contract(escrow, ESCROW_ABI, provider||signer);
-    const [depA, depB, timeLeft, finished] = await c.status();
-    log(`Status → A:${depA} B:${depB} timeLeft:${Number(timeLeft)}s finished:${finished}`, "ok");
-  }catch(e){ log(`Status error: ${e.message}`, "err"); }
-}
-async function approve(side) {
-  try{
-    if (!signer) await connect();
-    const escrow = $("escrowAddr").value.trim();
-    if (!escrow) return log("Enter escrow address.", "err");
-    const c = new ethers.Contract(escrow, ESCROW_ABI, provider||signer);
-    const [ta, tb, aAmt, bAmt] = await Promise.all([c.tokenA(), c.tokenB(), c.amountA(), c.amountB()]);
-    const tokenAddr = side === "A" ? ta : tb;
-    const need = side === "A" ? aAmt : bAmt;
-
-    const token = new ethers.Contract(tokenAddr, ERC20_ABI, signer);
-    const my = await signer.getAddress();
-    const allowance = await token.allowance(my, escrow);
-    if (allowance >= need) { log(`Allowance already sufficient for side ${side}.`, "ok"); return; }
-    const tx = await token.approve(escrow, need);
-    log(`Approve ${side} tx: ${tx.hash}`, "warn");
-    await tx.wait();
-    log(`Approved ${side}.`, "ok");
-  }catch(e){ log(`Approve ${side} error: ${e.message}`, "err"); }
-}
-async function doDeposit(side) {
-  try{
-    if (!signer) await connect();
-    const escrow = $("escrowAddr").value.trim();
-    if (!escrow) return log("Enter escrow address.", "err");
-    const c = new ethers.Contract(escrow, ESCROW_ABI, signer);
-    const tx = await (side==="A" ? c.depositA() : c.depositB());
-    log(`Deposit ${side} tx: ${tx.hash}`, "warn");
-    await tx.wait();
-    log(`Deposited ${side}.`, "ok");
-  }catch(e){ log(`Deposit ${side} error: ${e.message}`, "err"); }
-}
-async function settle() {
-  try{
-    if (!signer) await connect();
-    const escrow = $("escrowAddr").value.trim();
-    const c = new ethers.Contract(escrow, ESCROW_ABI, signer);
-    const tx = await c.settle();
-    log(`Settle tx: ${tx.hash}`, "warn");
-    await tx.wait();
-    log("Settled atomically.", "ok");
-  }catch(e){ log(`Settle error: ${e.message}`, "err"); }
-}
-async function refund() {
-  try{
-    if (!signer) await connect();
-    const escrow = $("escrowAddr").value.trim();
-    const c = new ethers.Contract(escrow, ESCROW_ABI, signer);
-    const tx = await c.refund();
-    log(`Refund tx: ${tx.hash}`, "warn");
-    await tx.wait();
-    log("Refund executed (post-deadline).", "ok");
-  }catch(e){ log(`Refund error: ${e.message}`, "err"); }
-}
-
-/* ---------- WIRE EVENTS AFTER DOM READY ---------- */
-window.addEventListener("DOMContentLoaded", () => {
-  // Pre-fill factory + ESTEEM
-  if (DEFAULT_FACTORY) $("factoryAddr").value = DEFAULT_FACTORY;
-  if (ESTEEM_ADDR)     $("tokenA").value    = ESTEEM_ADDR;
-
-  $("connectBtn").addEventListener("click", connect);
-  $("switchBtn").addEventListener("click", switchToPulse);
-  $("predictBtn").addEventListener("click", predictAddress);
-  $("deployBtn").addEventListener("click", deployEscrow);
-
-  $("readAllBtn").addEventListener("click", readAll);
-  $("statusBtn").addEventListener("click", refreshStatus);
-  $("approveA").addEventListener("click", () => approve("A"));
-  $("approveB").addEventListener("click", () => approve("B"));
-  $("depositA").addEventListener("click", () => doDeposit("A"));
-  $("depositB").addEventListener("click", () => doDeposit("B"));
-  $("settleBtn").addEventListener("click", settle);
-  $("refundBtn").addEventListener("click", refund);
+  $("connectBtn").onclick=connect;
+  $("switchBtn").onclick=switchToPulse;
+  $("predictBtn").onclick=predictAddress;
+  $("deployBtn").onclick=deployEscrow;
 });
 </script>
 </body>
